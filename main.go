@@ -2,8 +2,6 @@ package main
 
 import (
 	"bufio"
-	"errors"
-	"flag"
 	"io"
 	"log"
 	"os"
@@ -11,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/forrestjacobs/pipe-bot/internal/token"
 )
 
 var commandToActivity = map[string]discordgo.ActivityType{
@@ -31,26 +30,8 @@ func dieOnError(err error) {
 	}
 }
 
-func getToken() (string, error) {
-	var token string
-	flag.StringVar(&token, "token", "", "Discord bot token")
-	flag.StringVar(&token, "t", "", "Discord bot token (shorthand)")
-
-	flag.Parse()
-
-	if token != "" {
-		return token, nil
-	}
-
-	if token, present := os.LookupEnv("PIPEBOT_DISCORD_TOKEN"); present {
-		return token, nil
-	}
-
-	return "", errors.New("missing token")
-}
-
 func main() {
-	token, err := getToken()
+	token, err := token.GetToken()
 	dieOnError(err)
 
 	discord, err := discordgo.New("Bot " + token)
