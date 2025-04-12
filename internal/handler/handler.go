@@ -18,7 +18,7 @@ func HandleCommand(session *discordgo.Session, line string) error {
 
 	command, args := match[1], match[2]
 	if handler, exists := commandHandlers[command]; exists {
-		return handler(session, command, args)
+		return handler(session, args)
 	} else {
 		return errors.New("unrecognized command " + command)
 	}

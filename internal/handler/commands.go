@@ -10,8 +10,8 @@ import (
 
 var messageArgsPattern = regexp.MustCompile(`^:(\d+)\s+(.+)$`)
 
-func makeStatusHandler(activityType discordgo.ActivityType) func(session *discordgo.Session, command string, args string) error {
-	return func(session *discordgo.Session, command string, args string) error {
+func makeStatusHandler(activityType discordgo.ActivityType) func(session *discordgo.Session, args string) error {
+	return func(session *discordgo.Session, args string) error {
 		name := strings.TrimSpace(args)
 		if name == "" {
 			return errors.New("missing argument")
@@ -26,8 +26,8 @@ func makeStatusHandler(activityType discordgo.ActivityType) func(session *discor
 	}
 }
 
-var commandHandlers = map[string]func(session *discordgo.Session, command string, args string) error{
-	"message": func(session *discordgo.Session, command string, args string) error {
+var commandHandlers = map[string]func(session *discordgo.Session, args string) error{
+	"message": func(session *discordgo.Session, args string) error {
 		argMatch := messageArgsPattern.FindStringSubmatch(args)
 		if argMatch == nil {
 			return errors.New("could not parse message")
@@ -37,7 +37,7 @@ var commandHandlers = map[string]func(session *discordgo.Session, command string
 		_, err := session.ChannelMessageSend(channelId, body)
 		return err
 	},
-	"clear_status": func(session *discordgo.Session, command string, args string) error {
+	"clear_status": func(session *discordgo.Session, args string) error {
 		if args != "" {
 			return errors.New("unexpected argument")
 		}
