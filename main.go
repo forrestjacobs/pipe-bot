@@ -12,7 +12,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-var inputPattern = regexp.MustCompile(`^(status|message)\b\s*(.*)$`)
+var inputPattern = regexp.MustCompile(`^(status|message)\b\s*(.*)\n$`)
 var messagePattern = regexp.MustCompile(`^(\d+)\s*(.*)$`)
 
 func dieOnError(err error) {
@@ -58,7 +58,7 @@ func main() {
 			continue
 		}
 
-		command, body := match[0], match[1]
+		command, body := match[1], match[2]
 		switch command {
 		case "status":
 			dieOnError(discord.UpdateGameStatus(0, strings.TrimSpace(body)))
@@ -69,7 +69,7 @@ func main() {
 				continue
 			}
 
-			channelId, message := messageMatch[0], messageMatch[1]
+			channelId, message := messageMatch[1], messageMatch[2]
 			_, err = discord.ChannelMessageSend(channelId, message)
 			dieOnError(err)
 		}
