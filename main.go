@@ -23,7 +23,6 @@ func dieOnError(err error) {
 	}
 }
 
-// TODO: Pass token as file
 func getToken() (string, error) {
 	var token string
 	flag.StringVar(&token, "token", "", "Discord bot token")
@@ -31,11 +30,15 @@ func getToken() (string, error) {
 
 	flag.Parse()
 
-	if token == "" {
-		return "", errors.New("missing token")
+	if token != "" {
+		return token, nil
 	}
 
-	return token, nil
+	if token, present := os.LookupEnv("PIPEBOT_DISCORD_TOKEN"); present {
+		return token, nil
+	}
+
+	return "", errors.New("missing token")
 }
 
 func main() {
