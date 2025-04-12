@@ -5,9 +5,13 @@ pipe-bot lets you pipe messages and status updates to your Discord from shell sc
 ```sh
 # Make a named pipe
 mkfifo discord_pipe
+
+# Start the bot
 pipe-bot -t $DISCORD_TOKEN < discord_pipe
+
+# Send messages and status updates
 echo "message:$CHANNEL_ID Hello there!" > discord_pipe
-echo "status:playing my guitar"
+echo "status:playing my guitar" > discord_pipe
 ```
 
 ## Setup
@@ -31,5 +35,5 @@ echo "status:playing my guitar"
 
     ```sh
     echo "message:$CHANNEL_ID Hello there!" > discord_pipe
-    echo "status:playing my guitar"
+    echo "status:playing my guitar" > discord_pipe
     ```
