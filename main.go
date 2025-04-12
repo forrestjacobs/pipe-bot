@@ -11,22 +11,30 @@ import (
 	"github.com/forrestjacobs/pipe-bot/internal/token"
 )
 
-func dieOnError(err error) {
+type exitErrorCode int
+
+const (
+	TokenReadError exitErrorCode = 10
+
+	DiscordCreateSessionError  exitErrorCode = 20
+	DiscordOpenConnectionError exitErrorCode = 21
+)
+
+func dieOnError(err error, code exitErrorCode) {
 	if err != nil {
 		log.Println(err)
-		// TODO: Different exit codes for different errors
-		os.Exit(1)
+		os.Exit(int(code))
 	}
 }
 
 func main() {
 	token, err := token.GetToken()
-	dieOnError(err)
+	dieOnError(err, TokenReadError)
 
 	discord, err := discordgo.New("Bot " + token)
-	dieOnError(err)
+	dieOnError(err, DiscordCreateSessionError)
 
-	dieOnError(discord.Open())
+	dieOnError(discord.Open(), DiscordOpenConnectionError)
 	defer discord.Close()
 
 	reader := bufio.NewReader(os.Stdin)
