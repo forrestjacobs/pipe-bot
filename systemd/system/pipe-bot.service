@@ -1,0 +1,11 @@
+[Unit]
+Description=pipe-bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/pipe-bot.env
+ExecStart=/usr/bin/pipe-bot
+
+[Install]
+WantedBy=multi-user.target
