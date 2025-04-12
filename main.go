@@ -13,7 +13,15 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-var inputPattern = regexp.MustCompile(`^(status|message:(\d+))\b\s*(.+)$`)
+var commandToActivity = map[string]discordgo.ActivityType{
+	"playing":      discordgo.ActivityTypeGame,
+	"listening_to": discordgo.ActivityTypeListening,
+	"watching":     discordgo.ActivityTypeWatching,
+	"competing_in": discordgo.ActivityTypeCompeting,
+}
+
+var inputPattern = regexp.MustCompile(`^(\w+)(.*)$`)
+var messageArgsPattern = regexp.MustCompile(`^:(\d+)\s+(.+)$`)
 
 func dieOnError(err error) {
 	if err != nil {
@@ -66,12 +74,38 @@ func main() {
 			continue
 		}
 
-		command, channelId, body := match[1], match[2], strings.TrimSpace(match[3])
-		if command == "status" {
-			dieOnError(discord.UpdateGameStatus(0, body))
-		} else if strings.HasPrefix(command, "message") {
+		command, args := match[1], match[2]
+		if command == "message" {
+			argMatch := messageArgsPattern.FindStringSubmatch(args)
+			if argMatch == nil {
+				log.Println("Could not parse message")
+				continue
+			}
+			channelId, body := argMatch[1], argMatch[2]
+
 			_, err = discord.ChannelMessageSend(channelId, body)
 			dieOnError(err)
+		} else if command == "clear_status" {
+			if args != "" {
+				log.Println("Could not parse clear_status")
+				continue
+			}
+			dieOnError(discord.UpdateStatusComplex(discordgo.UpdateStatusData{
+				Status: "online",
+			}))
+		} else if activityType, present := commandToActivity[command]; present {
+			name := strings.TrimSpace(args)
+			if name == "" {
+				log.Println("Could not parse status")
+				continue
+			}
+			dieOnError(discord.UpdateStatusComplex(discordgo.UpdateStatusData{
+				Status: "online",
+				Activities: []*discordgo.Activity{{
+					Name: strings.TrimSpace(args),
+					Type: activityType,
+				}},
+			}))
 		}
 	}
 }
