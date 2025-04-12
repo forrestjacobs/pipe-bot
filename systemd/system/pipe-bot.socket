@@ -1,0 +1,3 @@
+[Socket]
+ListenFIFO=%t/discord
+Service=pipe-bot.service

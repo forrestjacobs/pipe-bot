@@ -6,6 +6,10 @@ Wants=network-online.target
 [Service]
 EnvironmentFile=/etc/pipe-bot.env
 ExecStart=/usr/bin/pipe-bot
+Sockets=pipe-bot.socket
+StandardInput=socket
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
