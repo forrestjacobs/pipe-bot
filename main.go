@@ -12,8 +12,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-var inputPattern = regexp.MustCompile(`^(status|message)\b\s*(.*)\n$`)
-var messagePattern = regexp.MustCompile(`^(\d+)\s*(.*)$`)
+var inputPattern = regexp.MustCompile(`^(status|message:(\d+))\b\s*(.+)$`)
 
 func dieOnError(err error) {
 	if err != nil {
@@ -53,27 +52,19 @@ func main() {
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		text, err := reader.ReadString('\n')
+		line, err := reader.ReadString('\n')
 		dieOnError(err)
-		match := inputPattern.FindStringSubmatch(text)
+		match := inputPattern.FindStringSubmatch(strings.TrimSuffix(line, "\n"))
 		if match == nil {
 			log.Println("Could not parse input")
 			continue
 		}
 
-		command, body := match[1], match[2]
-		switch command {
-		case "status":
-			dieOnError(discord.UpdateGameStatus(0, strings.TrimSpace(body)))
-		case "message":
-			messageMatch := messagePattern.FindStringSubmatch(body)
-			if messageMatch == nil {
-				log.Println("Could not parse message")
-				continue
-			}
-
-			channelId, message := messageMatch[1], messageMatch[2]
-			_, err = discord.ChannelMessageSend(channelId, message)
+		command, channelId, body := match[1], match[2], strings.TrimSpace(match[3])
+		if command == "status" {
+			dieOnError(discord.UpdateGameStatus(0, body))
+		} else if strings.HasPrefix(command, "message") {
+			_, err = discord.ChannelMessageSend(channelId, body)
 			dieOnError(err)
 		}
 	}
