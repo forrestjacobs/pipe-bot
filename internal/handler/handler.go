@@ -7,7 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-var inputPattern = regexp.MustCompile(`^(\w+)(?:\s+(.+?))\s*?\n`)
+var inputPattern = regexp.MustCompile(`^(\w+)\s*(?:\s(.+?)\s*)?\n`)
 
 func HandleCommand(session *discordgo.Session, line string) error {
 	match := inputPattern.FindStringSubmatch(line)
