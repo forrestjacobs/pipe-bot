@@ -3,23 +3,21 @@ package handler
 import (
 	"errors"
 	"regexp"
-	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-var messageArgsPattern = regexp.MustCompile(`^:(\d+)\s+(.+)$`)
+var messagePattern = regexp.MustCompile(`^(\d+)\s+(.+)$`)
 
 func makeStatusHandler(activityType discordgo.ActivityType) func(session *discordgo.Session, args string) error {
 	return func(session *discordgo.Session, args string) error {
-		name := strings.TrimSpace(args)
-		if name == "" {
+		if args == "" {
 			return errors.New("missing argument")
 		}
 		return session.UpdateStatusComplex(discordgo.UpdateStatusData{
 			Status: "online",
 			Activities: []*discordgo.Activity{{
-				Name: strings.TrimSpace(args),
+				Name: args,
 				Type: activityType,
 			}},
 		})
@@ -28,11 +26,11 @@ func makeStatusHandler(activityType discordgo.ActivityType) func(session *discor
 
 var commandHandlers = map[string]func(session *discordgo.Session, args string) error{
 	"message": func(session *discordgo.Session, args string) error {
-		argMatch := messageArgsPattern.FindStringSubmatch(args)
-		if argMatch == nil {
+		match := messagePattern.FindStringSubmatch(args)
+		if match == nil {
 			return errors.New("could not parse message")
 		}
-		channelId, body := argMatch[1], argMatch[2]
+		channelId, body := match[1], match[2]
 
 		_, err := session.ChannelMessageSend(channelId, body)
 		return err

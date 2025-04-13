@@ -3,15 +3,14 @@ package handler
 import (
 	"errors"
 	"regexp"
-	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-var inputPattern = regexp.MustCompile(`^(\w+)(.*)$`)
+var inputPattern = regexp.MustCompile(`^(\w+)(?:\s+(.+?))\s*?\n`)
 
 func HandleCommand(session *discordgo.Session, line string) error {
-	match := inputPattern.FindStringSubmatch(strings.TrimSuffix(line, "\n"))
+	match := inputPattern.FindStringSubmatch(line)
 	if match == nil {
 		return errors.New("could not parse input")
 	}

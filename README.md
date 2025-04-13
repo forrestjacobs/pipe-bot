@@ -11,7 +11,7 @@ pipe-bot -t $DISCORD_TOKEN < discord_pipe &
 botpid=$!
 
 # Send messages and status updates
-echo "message:$CHANNEL_ID Hello there!" > discord_pipe
+echo "message $CHANNEL_ID Hello there!" > discord_pipe
 echo "playing my guitar" > discord_pipe
 
 # Kill the bot and clean up
@@ -39,6 +39,6 @@ rm discord_pipe
  6. You can now pipe status updates and messages into the named pipe!
 
     ```sh
-    echo "message:$CHANNEL_ID Hello there!" > discord_pipe
+    echo "message $CHANNEL_ID Hello there!" > discord_pipe
     echo "playing my guitar" > discord_pipe
     ```
