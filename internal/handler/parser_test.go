@@ -29,9 +29,9 @@ func TestUnrecognizedCommand(t *testing.T) {
 
 func TestParseMessage(t *testing.T) {
 	runner, err := parse("message 12345 message content\n")
-	if !reflect.DeepEqual(runner, &MessageCommand{
-		ChannelId: "12345",
-		Content:   "message content",
+	if !reflect.DeepEqual(runner, &messageCommand{
+		channelId: "12345",
+		content:   "message content",
 	}) {
 		t.Error("Not equal")
 	}
@@ -72,7 +72,7 @@ func TestParseMessageWithNoArgs(t *testing.T) {
 
 func TestParseClearStatus(t *testing.T) {
 	runner, err := parse("clear_status\n")
-	if !reflect.DeepEqual(runner, &ClearStatusCommand{}) {
+	if !reflect.DeepEqual(runner, &StatusCommand{discordgo.UpdateStatusData{Status: "online"}}) {
 		t.Error("Not equal")
 	}
 	if err != nil {
@@ -92,10 +92,13 @@ func TestParseClearStatusWithArgs(t *testing.T) {
 
 func TestParsePlayingStatus(t *testing.T) {
 	runner, err := parse("playing a guitar\n")
-	if !reflect.DeepEqual(runner, &StatusCommand{
-		Name: "a guitar",
-		Type: discordgo.ActivityTypeGame,
-	}) {
+	if !reflect.DeepEqual(runner, &StatusCommand{discordgo.UpdateStatusData{
+		Status: "online",
+		Activities: []*discordgo.Activity{{
+			Type: discordgo.ActivityTypeGame,
+			Name: "a guitar",
+		}},
+	}}) {
 		t.Error("Not equal")
 	}
 	if err != nil {

@@ -13,6 +13,8 @@ var messagePattern = regexp.MustCompile(`^(\d+)\s+(.+)$`)
 var errParse = errors.New("could not parse input")
 var errArgs = errors.New("could not parse command")
 
+var clearStatusCommand = &StatusCommand{discordgo.UpdateStatusData{Status: "online"}}
+
 type UnrecognizedCommandError struct {
 	name string
 }
@@ -21,34 +23,39 @@ func (e *UnrecognizedCommandError) Error() string {
 	return "unrecognized command " + e.name
 }
 
-func makeStatusParser(activityType discordgo.ActivityType) func(args string) (Command, error) {
-	return func(args string) (Command, error) {
+func makeStatusParser(activityType discordgo.ActivityType) func(args string) (command, error) {
+	return func(args string) (command, error) {
 		if args == "" {
 			return nil, errArgs
 		}
 		return &StatusCommand{
-			Name: args,
-			Type: activityType,
+			data: discordgo.UpdateStatusData{
+				Status: "online",
+				Activities: []*discordgo.Activity{{
+					Type: activityType,
+					Name: args,
+				}},
+			},
 		}, nil
 	}
 }
 
-var parsers = map[string]func(args string) (Command, error){
-	"message": func(args string) (Command, error) {
+var parsers = map[string]func(args string) (command, error){
+	"message": func(args string) (command, error) {
 		match := messagePattern.FindStringSubmatch(args)
 		if match == nil {
 			return nil, errArgs
 		}
-		return &MessageCommand{
-			ChannelId: match[1],
-			Content:   match[2],
+		return &messageCommand{
+			channelId: match[1],
+			content:   match[2],
 		}, nil
 	},
-	"clear_status": func(args string) (Command, error) {
+	"clear_status": func(args string) (command, error) {
 		if args != "" {
 			return nil, errArgs
 		}
-		return &ClearStatusCommand{}, nil
+		return clearStatusCommand, nil
 	},
 	"playing":      makeStatusParser(discordgo.ActivityTypeGame),
 	"listening_to": makeStatusParser(discordgo.ActivityTypeListening),
@@ -56,7 +63,7 @@ var parsers = map[string]func(args string) (Command, error){
 	"competing_in": makeStatusParser(discordgo.ActivityTypeCompeting),
 }
 
-func parse(str string) (Command, error) {
+func parse(str string) (command, error) {
 	match := inputPattern.FindStringSubmatch(str)
 	if match == nil {
 		return nil, errParse

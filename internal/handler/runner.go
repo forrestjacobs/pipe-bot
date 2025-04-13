@@ -2,39 +2,24 @@ package handler
 
 import "github.com/bwmarrin/discordgo"
 
-var clearStatusData = discordgo.UpdateStatusData{Status: "online"}
-
-type Command interface {
+type command interface {
 	run(session *discordgo.Session) error
 }
 
-type MessageCommand struct {
-	ChannelId string
-	Content   string
+type messageCommand struct {
+	channelId string
+	content   string
 }
 
-func (c *MessageCommand) run(session *discordgo.Session) error {
-	_, err := session.ChannelMessageSend(c.ChannelId, c.Content)
+func (c *messageCommand) run(session *discordgo.Session) error {
+	_, err := session.ChannelMessageSend(c.channelId, c.content)
 	return err
 }
 
 type StatusCommand struct {
-	Type discordgo.ActivityType
-	Name string
+	data discordgo.UpdateStatusData
 }
 
 func (c *StatusCommand) run(session *discordgo.Session) error {
-	return session.UpdateStatusComplex(discordgo.UpdateStatusData{
-		Status: "online",
-		Activities: []*discordgo.Activity{{
-			Type: c.Type,
-			Name: c.Name,
-		}},
-	})
-}
-
-type ClearStatusCommand struct{}
-
-func (c *ClearStatusCommand) run(session *discordgo.Session) error {
-	return session.UpdateStatusComplex(clearStatusData)
+	return session.UpdateStatusComplex(c.data)
 }
