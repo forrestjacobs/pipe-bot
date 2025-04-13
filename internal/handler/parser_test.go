@@ -7,8 +7,28 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func TestMessage(t *testing.T) {
-	runner, err := parsers["message"]("12345 message content")
+func TestParseBadString(t *testing.T) {
+	runner, err := parse("Missing LF")
+	if runner != nil {
+		t.Error("Unexpected runner")
+	}
+	if err.Error() != "could not parse input" {
+		t.Error("Unexpected error")
+	}
+}
+
+func TestUnrecognizedCommand(t *testing.T) {
+	runner, err := parse("nonce\n")
+	if runner != nil {
+		t.Error("Unexpected runner")
+	}
+	if err.Error() != "unrecognized command nonce" {
+		t.Error("Unexpected error")
+	}
+}
+
+func TestParseMessage(t *testing.T) {
+	runner, err := parse("message 12345 message content\n")
 	if !reflect.DeepEqual(runner, &MessageCommand{
 		ChannelId: "12345",
 		Content:   "message content",
@@ -20,8 +40,8 @@ func TestMessage(t *testing.T) {
 	}
 }
 
-func TestMessageWithMissingChannel(t *testing.T) {
-	runner, err := parsers["message"]("content")
+func TestParseMessageWithMissingChannel(t *testing.T) {
+	runner, err := parse("message content\n")
 	if runner != nil {
 		t.Error("Unexpected runner")
 	}
@@ -30,8 +50,8 @@ func TestMessageWithMissingChannel(t *testing.T) {
 	}
 }
 
-func TestMessageWithMissingContent(t *testing.T) {
-	runner, err := parsers["message"]("12345")
+func TestParseMessageWithMissingContent(t *testing.T) {
+	runner, err := parse("message 12345\n")
 	if runner != nil {
 		t.Error("Unexpected runner")
 	}
@@ -40,8 +60,8 @@ func TestMessageWithMissingContent(t *testing.T) {
 	}
 }
 
-func TestMessageWithNoArgs(t *testing.T) {
-	runner, err := parsers["message"]("")
+func TestParseMessageWithNoArgs(t *testing.T) {
+	runner, err := parse("message\n")
 	if runner != nil {
 		t.Error("Unexpected runner")
 	}
@@ -50,8 +70,8 @@ func TestMessageWithNoArgs(t *testing.T) {
 	}
 }
 
-func TestClearStatus(t *testing.T) {
-	runner, err := parsers["clear_status"]("")
+func TestParseClearStatus(t *testing.T) {
+	runner, err := parse("clear_status\n")
 	if !reflect.DeepEqual(runner, &ClearStatusCommand{}) {
 		t.Error("Not equal")
 	}
@@ -60,8 +80,8 @@ func TestClearStatus(t *testing.T) {
 	}
 }
 
-func TestClearStatusWithArgs(t *testing.T) {
-	runner, err := parsers["clear_status"]("some args")
+func TestParseClearStatusWithArgs(t *testing.T) {
+	runner, err := parse("clear_status some args\n")
 	if runner != nil {
 		t.Error("Unexpected runner")
 	}
@@ -70,8 +90,8 @@ func TestClearStatusWithArgs(t *testing.T) {
 	}
 }
 
-func TestPlayingStatus(t *testing.T) {
-	runner, err := parsers["playing"]("a guitar")
+func TestParsePlayingStatus(t *testing.T) {
+	runner, err := parse("playing a guitar\n")
 	if !reflect.DeepEqual(runner, &StatusCommand{
 		Name: "a guitar",
 		Type: discordgo.ActivityTypeGame,
@@ -83,8 +103,8 @@ func TestPlayingStatus(t *testing.T) {
 	}
 }
 
-func TestPlayingEmptyStatus(t *testing.T) {
-	runner, err := parsers["playing"]("")
+func TestParsePlayingEmptyStatus(t *testing.T) {
+	runner, err := parse("playing\n")
 	if runner != nil {
 		t.Error("Unexpected runner")
 	}
