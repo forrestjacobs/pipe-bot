@@ -6,6 +6,8 @@ import (
 	"os"
 )
 
+var errMissingToken = errors.New("missing token")
+
 func GetToken() (string, error) {
 	var token string
 	flag.StringVar(&token, "token", "", "Discord bot token")
@@ -21,5 +23,5 @@ func GetToken() (string, error) {
 		return token, nil
 	}
 
-	return "", errors.New("missing token")
+	return "", errMissingToken
 }

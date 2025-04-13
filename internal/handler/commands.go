@@ -9,10 +9,12 @@ import (
 
 var messagePattern = regexp.MustCompile(`^(\d+)\s+(.+)$`)
 
+var errArgs = errors.New("could not parse arguments")
+
 func makeStatusHandler(activityType discordgo.ActivityType) func(session *discordgo.Session, args string) error {
 	return func(session *discordgo.Session, args string) error {
 		if args == "" {
-			return errors.New("missing argument")
+			return errArgs
 		}
 		return session.UpdateStatusComplex(discordgo.UpdateStatusData{
 			Status: "online",
@@ -28,7 +30,7 @@ var commandHandlers = map[string]func(session *discordgo.Session, args string) e
 	"message": func(session *discordgo.Session, args string) error {
 		match := messagePattern.FindStringSubmatch(args)
 		if match == nil {
-			return errors.New("could not parse message")
+			return errArgs
 		}
 		channelId, body := match[1], match[2]
 
@@ -37,7 +39,7 @@ var commandHandlers = map[string]func(session *discordgo.Session, args string) e
 	},
 	"clear_status": func(session *discordgo.Session, args string) error {
 		if args != "" {
-			return errors.New("unexpected argument")
+			return errArgs
 		}
 		return session.UpdateStatusComplex(discordgo.UpdateStatusData{
 			Status: "online",
