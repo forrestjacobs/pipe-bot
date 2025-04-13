@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"bufio"
 	"errors"
+	"io"
 	"regexp"
 
 	"github.com/bwmarrin/discordgo"
@@ -19,7 +21,16 @@ func (e *UnrecognizedCommandError) Error() string {
 	return "unrecognized command " + e.name
 }
 
-func HandleCommand(session *discordgo.Session, line string) error {
+func readLine(reader *bufio.Reader) (string, error) {
+	// Ignore EOFs if there's no pending text
+	line, err := "", io.EOF
+	for line == "" && err == io.EOF {
+		line, err = reader.ReadString('\n')
+	}
+	return line, err
+}
+
+func run(session *discordgo.Session, line string) error {
 	match := inputPattern.FindStringSubmatch(line)
 	if match == nil {
 		return errParse
@@ -31,5 +42,12 @@ func HandleCommand(session *discordgo.Session, line string) error {
 	} else {
 		return &UnrecognizedCommandError{name: command}
 	}
+}
 
+func Handle(session *discordgo.Session, reader *bufio.Reader) error {
+	line, err := readLine(reader)
+	if err != nil {
+		return err
+	}
+	return run(session, line)
 }

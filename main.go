@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"io"
 	"log"
 	"os"
 
@@ -27,15 +26,6 @@ func dieOnError(err error, code exitErrorCode) {
 	}
 }
 
-func readLine(reader *bufio.Reader) (string, error) {
-	// Ignore EOFs if there's no pending text
-	line, err := "", io.EOF
-	for line == "" && err == io.EOF {
-		line, err = reader.ReadString('\n')
-	}
-	return line, err
-}
-
 func main() {
 	token, err := token.GetToken()
 	dieOnError(err, TokenReadError)
@@ -48,14 +38,7 @@ func main() {
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		line, err := readLine(reader)
-
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-
-		err = handler.HandleCommand(discord, line)
+		err = handler.Handle(discord, reader)
 		if err != nil {
 			log.Println(err)
 		}
