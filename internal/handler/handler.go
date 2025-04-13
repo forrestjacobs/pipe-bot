@@ -21,33 +21,37 @@ func (e *UnrecognizedCommandError) Error() string {
 	return "unrecognized command " + e.name
 }
 
-func readLine(reader *bufio.Reader) (string, error) {
+func read(reader *bufio.Reader) (string, error) {
 	// Ignore EOFs if there's no pending text
-	line, err := "", io.EOF
-	for line == "" && err == io.EOF {
-		line, err = reader.ReadString('\n')
+	str, err := "", io.EOF
+	for str == "" && err == io.EOF {
+		str, err = reader.ReadString('\n')
 	}
-	return line, err
+	return str, err
 }
 
-func run(session *discordgo.Session, line string) error {
-	match := inputPattern.FindStringSubmatch(line)
+func parse(str string) (Command, error) {
+	match := inputPattern.FindStringSubmatch(str)
 	if match == nil {
-		return errParse
+		return nil, errParse
 	}
 
-	command, args := match[1], match[2]
-	if handler, exists := commandHandlers[command]; exists {
-		return handler(session, args)
+	name, args := match[1], match[2]
+	if parser, exists := parsers[name]; exists {
+		return parser(args)
 	} else {
-		return &UnrecognizedCommandError{name: command}
+		return nil, &UnrecognizedCommandError{name}
 	}
 }
 
 func Handle(session *discordgo.Session, reader *bufio.Reader) error {
-	line, err := readLine(reader)
+	str, err := read(reader)
 	if err != nil {
 		return err
 	}
-	return run(session, line)
+	command, err := parse(str)
+	if err != nil {
+		return err
+	}
+	return command.run(session)
 }
