@@ -1,8 +1,5 @@
 # pipe-bot: Update Discord from shell scripts
 
-> [!CAUTION]
-> This is in pre-alpha state. Use at your own risk.
-
 pipe-bot lets you pipe messages and status updates to your Discord from shell scripts.
 
 ```sh
