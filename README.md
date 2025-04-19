@@ -42,3 +42,32 @@ rm discord_pipe
     echo "message $CHANNEL_ID Hello there!" > discord_pipe
     echo "playing my guitar" > discord_pipe
     ```
+
+## Commands
+
+* `message <CHANNEL ID> <MESSAGE>`
+
+  ```sh
+  echo "message 12345 Hello there!" > discord_pipe
+  ```
+
+  Sends a Discord message. It takes two required arguments:
+  * `CHANNEL ID`: The numeric ID of the channel receiving the message. You can find this in Discord by right-clicking on the channel and selecting _Copy Channel ID_.
+  * `MESSAGE`: The actual message you want to send
+
+* `playing|listening_to|watching|competing_in <VALUE>`
+
+  ```sh
+  echo "playing a guitar" > discord_pipe
+  echo "listening_to the breeze" > discord_pipe
+  ```
+
+  This updates the bot's status. The single required `VALUE` argument is the text of the status.
+
+* `clear_status`
+
+  ```sh
+  echo "clear_status" > discord_pipe
+  ```
+
+  This clears the bot's status. It takes no arguments.
