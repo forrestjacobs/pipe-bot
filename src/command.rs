@@ -136,7 +136,7 @@ mod tests {
     #[test]
     fn parse_clear_status_with_args() {
         let command = Command::try_from("clear_status lorem ipsum\n");
-        assert_eq!(command.unwrap_err().to_string(), "unexpected arguments");
+        assert_eq!(command.unwrap_err().to_string(), "unexpected token");
     }
 
     #[test]
@@ -154,6 +154,6 @@ mod tests {
     #[test]
     fn parse_playing_empty_status() {
         let command = Command::try_from("playing\n");
-        assert_eq!(command.unwrap_err().to_string(), "expected string argument");
+        assert_eq!(command.unwrap_err().to_string(), "expected token");
     }
 }
