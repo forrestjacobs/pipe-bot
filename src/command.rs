@@ -86,6 +86,12 @@ mod tests {
     use super::*;
 
     #[test]
+    fn parse_missing_command() {
+        let command = Command::try_from("\n");
+        assert_eq!(command.unwrap_err().to_string(), "expected command");
+    }
+
+    #[test]
     fn parse_unrecognized_command() {
         let command = Command::try_from("lorem\n");
         assert_eq!(
