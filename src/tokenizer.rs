@@ -1,4 +1,4 @@
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 
 pub struct Tokenizer<'a> {
     str: &'a str,
@@ -19,6 +19,10 @@ impl<'a> Tokenizer<'a> {
             bail!("expected token")
         }
         Ok(str)
+    }
+
+    pub fn expect_next(&mut self) -> Result<&'a str> {
+        self.next().ok_or_else(|| anyhow!("expected token"))
     }
 }
 
@@ -77,20 +81,20 @@ mod tests {
     }
 
     #[test]
-    fn tokenize_expect_none() {
+    fn expect_none() {
         let tokenizer = Tokenizer::from("");
         assert!(tokenizer.expect_none().is_ok());
     }
 
     #[test]
-    fn tokenize_expect_none_after_iterating() {
+    fn expect_none_after_iterating() {
         let mut tokenizer = Tokenizer::from("lorem");
         tokenizer.next();
         assert!(tokenizer.expect_none().is_ok());
     }
 
     #[test]
-    fn tokenize_expect_none_with_token() {
+    fn expect_none_with_token() {
         let tokenizer = Tokenizer::from("lorem ipsum");
         assert_eq!(
             tokenizer.expect_none().unwrap_err().to_string(),
@@ -99,23 +103,29 @@ mod tests {
     }
 
     #[test]
-    fn tokenize_expect_rest() {
+    fn expect_rest() {
         let tokenizer = Tokenizer::from("lorem ipsum");
         assert_eq!(tokenizer.expect_rest().unwrap(), "lorem ipsum");
     }
 
     #[test]
-    fn tokenize_expect_rest_after_iterating() {
+    fn expect_rest_after_iterating() {
         let mut tokenizer = Tokenizer::from("lorem ipsum dolor");
         tokenizer.next();
         assert_eq!(tokenizer.expect_rest().unwrap(), "ipsum dolor");
     }
 
     #[test]
-    fn tokenize_expect_rest_without_token() {
-        let tokenizer = Tokenizer::from("");
+    fn expect_next() {
+        let mut tokenizer = Tokenizer::from("lorem");
+        assert_eq!(tokenizer.expect_next().unwrap(), "lorem");
+    }
+
+    #[test]
+    fn expect_next_without_token() {
+        let mut tokenizer = Tokenizer::from("");
         assert_eq!(
-            tokenizer.expect_rest().unwrap_err().to_string(),
+            tokenizer.expect_next().unwrap_err().to_string(),
             "expected token"
         );
     }

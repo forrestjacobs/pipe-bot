@@ -1,5 +1,5 @@
 use crate::tokenizer::Tokenizer;
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use serenity::all::Context as SerenityContext;
 use serenity::all::{ActivityData, ActivityType, ChannelId};
 
@@ -58,25 +58,24 @@ impl<'a> TryFrom<&'a str> for Command<'a> {
     fn try_from(value: &'a str) -> Result<Self> {
         let mut tokenizer = Tokenizer::from(value);
 
-        match tokenizer.next() {
-            Some("message") => Ok(Command::Message {
+        match tokenizer.expect_next().context("expected command")? {
+            "message" => Ok(Command::Message {
                 channel_id: tokenizer
-                    .next()
-                    .ok_or_else(|| anyhow!("expected channel ID"))?
+                    .expect_next()
+                    .context("expected channel ID")?
                     .parse()
                     .context("channel ID must be a number")?,
                 content: tokenizer.expect_rest().context("expected message")?,
             }),
-            Some("playing") => parse_status(ActivityType::Playing, tokenizer),
-            Some("listening_to") => parse_status(ActivityType::Listening, tokenizer),
-            Some("watching") => parse_status(ActivityType::Watching, tokenizer),
-            Some("competing_in") => parse_status(ActivityType::Competing, tokenizer),
-            Some("clear_status") => {
+            "playing" => parse_status(ActivityType::Playing, tokenizer),
+            "listening_to" => parse_status(ActivityType::Listening, tokenizer),
+            "watching" => parse_status(ActivityType::Watching, tokenizer),
+            "competing_in" => parse_status(ActivityType::Competing, tokenizer),
+            "clear_status" => {
                 tokenizer.expect_none()?;
                 Ok(Command::ClearStatus)
             }
-            Some(name) => bail!("unrecognized command {name}"),
-            None => bail!("expected command"),
+            name => bail!("unrecognized command {name}"),
         }
     }
 }
