@@ -1,7 +1,7 @@
 use crate::tokenizer::Tokenizer;
-use anyhow::{Context, Result, bail};
-use serenity::all::Context as SerenityContext;
-use serenity::all::{ActivityData, ActivityType, ChannelId};
+use anyhow::{Context as AnyhowContext, Result, bail};
+use serenity::all::{ActivityData, ActivityType, ChannelId, Context};
+use std::io::BufRead;
 
 #[derive(Debug, PartialEq)]
 pub enum Command<'a> {
@@ -17,7 +17,16 @@ pub enum Command<'a> {
 }
 
 impl Command<'_> {
-    pub async fn run(self, ctx: &SerenityContext) -> Result<()> {
+    pub fn from_reader<'a, B: BufRead>(
+        reader: &mut B,
+        buffer: &'a mut String,
+    ) -> Result<Command<'a>> {
+        buffer.clear();
+        while reader.read_line(buffer)? == 0 {}
+        Command::try_from(buffer.as_str())
+    }
+
+    pub async fn run(self, ctx: &Context) -> Result<()> {
         match self {
             Command::Message {
                 channel_id,
@@ -38,10 +47,6 @@ impl Command<'_> {
             }
         }
         Ok(())
-    }
-
-    pub async fn handle(value: &str, ctx: &SerenityContext) -> Result<()> {
-        Command::try_from(value)?.run(&ctx).await
     }
 }
 
@@ -83,82 +88,108 @@ impl<'a> TryFrom<&'a str> for Command<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io;
+
+    fn parse<'a>(value: &[u8], buffer: &'a mut String) -> Result<Command<'a>> {
+        let mut cursor = io::Cursor::new(value);
+        Command::from_reader(&mut cursor, buffer)
+    }
 
     #[test]
     fn parse_missing_command() {
-        let command = Command::try_from("\n");
-        assert_eq!(command.unwrap_err().to_string(), "expected command");
+        assert_eq!(
+            parse(b"\n", &mut String::new()).unwrap_err().to_string(),
+            "expected command"
+        );
     }
 
     #[test]
     fn parse_unrecognized_command() {
-        let command = Command::try_from("lorem\n");
         assert_eq!(
-            command.unwrap_err().to_string(),
+            parse(b"lorem\n", &mut String::new())
+                .unwrap_err()
+                .to_string(),
             "unrecognized command lorem"
         );
     }
 
     #[test]
     fn parse_message() {
-        let command = Command::try_from("message 12345 lorem ipsum\n");
         assert_eq!(
-            command.ok(),
-            Some(Command::Message {
+            parse(b"message 12345 lorem ipsum\n", &mut String::new()).unwrap(),
+            Command::Message {
                 channel_id: ChannelId::new(12345),
                 content: "lorem ipsum"
-            })
+            }
         );
     }
 
     #[test]
     fn parse_message_missing_channel() {
-        let command = Command::try_from("message\n");
-        assert_eq!(command.unwrap_err().to_string(), "expected channel ID");
+        assert_eq!(
+            parse(b"message\n", &mut String::new())
+                .unwrap_err()
+                .to_string(),
+            "expected channel ID"
+        );
     }
 
     #[test]
     fn parse_message_bad_channel() {
-        let command = Command::try_from("message lorem\n");
         assert_eq!(
-            command.unwrap_err().to_string(),
+            parse(b"message lorem\n", &mut String::new())
+                .unwrap_err()
+                .to_string(),
             "channel ID must be a number"
         );
     }
 
     #[test]
     fn parse_message_missing_message() {
-        let command = Command::try_from("message 12345\n");
-        assert_eq!(command.unwrap_err().to_string(), "expected message");
+        assert_eq!(
+            parse(b"message 12345\n", &mut String::new())
+                .unwrap_err()
+                .to_string(),
+            "expected message"
+        );
     }
 
     #[test]
     fn parse_clear_status() {
-        let command = Command::try_from("clear_status\n");
-        assert_eq!(command.ok(), Some(Command::ClearStatus));
+        assert_eq!(
+            parse(b"clear_status\n", &mut String::new()).unwrap(),
+            Command::ClearStatus
+        );
     }
 
     #[test]
     fn parse_clear_status_with_args() {
-        let command = Command::try_from("clear_status lorem ipsum\n");
-        assert_eq!(command.unwrap_err().to_string(), "unexpected token");
+        assert_eq!(
+            parse(b"clear_status lorem ipsum\n", &mut String::new())
+                .unwrap_err()
+                .to_string(),
+            "unexpected token"
+        );
     }
 
     #[test]
     fn parse_playing_status() {
-        let command = Command::try_from("playing a guitar\n");
         assert_eq!(
-            command.ok(),
-            Some(Command::Status {
+            parse(b"playing a guitar\n", &mut String::new()).unwrap(),
+            Command::Status {
                 name: "a guitar",
                 kind: ActivityType::Playing
-            })
+            }
         );
     }
 
     #[test]
     fn parse_playing_empty_status() {
-        let command = Command::try_from("playing\n");
-        assert_eq!(command.unwrap_err().to_string(), "expected token");
+        assert_eq!(
+            parse(b"playing\n", &mut String::new())
+                .unwrap_err()
+                .to_string(),
+            "expected token"
+        );
     }
 }

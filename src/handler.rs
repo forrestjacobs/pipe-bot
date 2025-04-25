@@ -1,7 +1,12 @@
 use crate::command::Command;
+use anyhow::Result;
 use serenity::all::{Context, EventHandler, Ready};
 use serenity::async_trait;
 use std::io;
+
+async fn handle(command: Result<Command<'_>>, ctx: &Context) -> Result<()> {
+    command?.run(&ctx).await
+}
 
 pub struct Handler;
 
@@ -12,15 +17,12 @@ impl EventHandler for Handler {
         let mut buffer = String::new();
 
         loop {
-            buffer.clear();
-            match stdin.read_line(&mut buffer) {
-                Ok(0) => {}
-                Ok(_) => {
-                    if let Err(e) = Command::handle(buffer.as_str(), &ctx).await {
-                        eprintln!("Error handling command: {e}")
-                    }
-                }
-                Err(e) => eprintln!("Error reading line: {e}"),
+            let command;
+            {
+                command = Command::from_reader(&mut stdin.lock(), &mut buffer);
+            }
+            if let Err(e) = handle(command, &ctx).await {
+                eprintln!("{e}")
             }
         }
     }
