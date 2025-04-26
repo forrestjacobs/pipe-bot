@@ -5,7 +5,7 @@ use serenity::async_trait;
 use std::io;
 
 async fn handle(command: Result<Command<'_>>, ctx: &Context) -> Result<()> {
-    command?.run(&ctx).await
+    command?.run(ctx).await
 }
 
 pub struct Handler;

@@ -1,7 +1,24 @@
 use crate::tokenizer::Tokenizer;
 use anyhow::{Context as AnyhowContext, Result, bail};
+use mockall::automock;
 use serenity::all::{ActivityData, ActivityType, ChannelId, Context};
 use std::io::BufRead;
+
+#[automock]
+pub trait DiscordContext {
+    async fn say(&self, channel_id: ChannelId, content: &str) -> serenity::Result<()>;
+    fn set_activity(&self, activity: Option<ActivityData>);
+}
+
+impl DiscordContext for Context {
+    async fn say(&self, channel_id: ChannelId, content: &str) -> serenity::Result<()> {
+        channel_id.say(&self.http, content).await?;
+        Ok(())
+    }
+    fn set_activity(&self, activity: Option<ActivityData>) {
+        self.set_activity(activity);
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Command<'a> {
@@ -26,13 +43,13 @@ impl Command<'_> {
         Command::try_from(buffer.as_str())
     }
 
-    pub async fn run(self, ctx: &Context) -> Result<()> {
+    pub async fn run<C: DiscordContext>(self, ctx: &C) -> Result<()> {
         match self {
             Command::Message {
                 channel_id,
                 content,
             } => {
-                channel_id.say(&ctx.http, content).await?;
+                ctx.say(channel_id, content).await?;
             }
             Command::Status { name, kind } => {
                 ctx.set_activity(Some(ActivityData {
@@ -88,6 +105,7 @@ impl<'a> TryFrom<&'a str> for Command<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mockall::predicate::*;
     use std::io;
 
     fn parse<'a>(value: &[u8], buffer: &'a mut String) -> Result<Command<'a>> {
@@ -154,6 +172,49 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn send_message() -> Result<()> {
+        let channel_id = ChannelId::new(12345);
+        let content = "Lorem ipsum";
+
+        let mut ctx = MockDiscordContext::new();
+        ctx.expect_say()
+            .with(eq(channel_id), eq(content))
+            .once()
+            .returning(|_, _| Ok(()));
+
+        Command::Message {
+            channel_id,
+            content,
+        }
+        .run(&ctx)
+        .await
+    }
+
+    #[tokio::test]
+    async fn send_message_error() {
+        let channel_id = ChannelId::new(12345);
+        let content = "Lorem ipsum";
+
+        let mut ctx = MockDiscordContext::new();
+        ctx.expect_say()
+            .with(eq(channel_id), eq(content))
+            .once()
+            .returning(|_, _| Err(serenity::Error::Other("test error")));
+
+        assert_eq!(
+            Command::Message {
+                channel_id,
+                content,
+            }
+            .run(&ctx)
+            .await
+            .unwrap_err()
+            .to_string(),
+            "test error"
+        );
+    }
+
     #[test]
     fn parse_clear_status() {
         assert_eq!(
@@ -170,6 +231,16 @@ mod tests {
                 .to_string(),
             "unexpected token"
         );
+    }
+
+    #[tokio::test]
+    async fn clear_status() -> Result<()> {
+        let mut ctx = MockDiscordContext::new();
+        ctx.expect_set_activity()
+            .withf(|d| d.is_none())
+            .once()
+            .return_const(());
+        Command::ClearStatus.run(&ctx).await
     }
 
     #[test]
@@ -191,5 +262,29 @@ mod tests {
                 .to_string(),
             "expected token"
         );
+    }
+
+    #[tokio::test]
+    async fn set_playing_status() -> Result<()> {
+        let mut ctx = MockDiscordContext::new();
+        ctx.expect_set_activity()
+            .withf(|d| match d {
+                Some(ActivityData {
+                    name,
+                    kind: ActivityType::Playing,
+                    state: None,
+                    url: None,
+                }) if name == "a guitar" => true,
+                _ => false,
+            })
+            .once()
+            .return_const(());
+
+        Command::Status {
+            kind: ActivityType::Playing,
+            name: "a guitar",
+        }
+        .run(&ctx)
+        .await
     }
 }
