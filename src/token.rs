@@ -23,6 +23,7 @@ pub fn get_token() -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     fn clear_env() {
         unsafe {
@@ -31,6 +32,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn get_token_from_args() {
         clear_env();
         unsafe {
@@ -46,6 +48,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn get_token_from_env() {
         clear_env();
         unsafe {
@@ -58,6 +61,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn missing_token() {
         clear_env();
         assert_eq!(
