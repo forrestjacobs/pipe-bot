@@ -1,12 +1,7 @@
 use crate::command::Command;
-use anyhow::Result;
 use serenity::all::{Context, EventHandler, Ready};
 use serenity::async_trait;
 use std::io;
-
-async fn handle(command: Result<Command<'_>>, ctx: &Context) -> Result<()> {
-    command?.run(ctx).await
-}
 
 pub struct Handler;
 
@@ -17,11 +12,7 @@ impl EventHandler for Handler {
         let mut buffer = String::new();
 
         loop {
-            let command;
-            {
-                command = Command::from_reader(&mut stdin.lock(), &mut buffer);
-            }
-            if let Err(e) = handle(command, &ctx).await {
+            if let Err(e) = Command::handle(&mut buffer, &stdin, &ctx).await {
                 eprintln!("{e}")
             }
         }

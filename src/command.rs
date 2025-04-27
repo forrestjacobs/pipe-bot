@@ -2,7 +2,7 @@ use crate::tokenizer::Tokenizer;
 use anyhow::{Context as AnyhowContext, Result, bail};
 use mockall::automock;
 use serenity::all::{ActivityData, ActivityType, ChannelId, Context};
-use std::io::BufRead;
+use std::io::{BufRead, Stdin, StdinLock};
 
 #[automock]
 pub trait DiscordContext {
@@ -17,6 +17,15 @@ impl DiscordContext for Context {
     }
     fn set_activity(&self, activity: Option<ActivityData>) {
         self.set_activity(activity);
+    }
+}
+
+pub trait Readable<Reader: BufRead> {
+    fn reader(self) -> Reader;
+}
+impl Readable<StdinLock<'static>> for &Stdin {
+    fn reader(self) -> StdinLock<'static> {
+        self.lock()
     }
 }
 
@@ -41,6 +50,15 @@ impl Command<'_> {
         buffer.clear();
         while reader.read_line(buffer)? == 0 {}
         Command::try_from(buffer.as_str())
+    }
+
+    pub async fn handle<B: BufRead, R: Readable<B>, C: DiscordContext>(
+        buffer: &mut String,
+        readable: R,
+        ctx: &C,
+    ) -> Result<()> {
+        let command = Command::from_reader(&mut readable.reader(), buffer);
+        command?.run(ctx).await
     }
 
     pub async fn run<C: DiscordContext>(self, ctx: &C) -> Result<()> {
@@ -106,66 +124,91 @@ impl<'a> TryFrom<&'a str> for Command<'a> {
 mod tests {
     use super::*;
     use mockall::predicate::*;
-    use std::io;
+    use std::collections::VecDeque;
+    use std::io::{Cursor, Read};
 
-    fn parse<'a>(value: &[u8], buffer: &'a mut String) -> Result<Command<'a>> {
-        let mut cursor = io::Cursor::new(value);
-        Command::from_reader(&mut cursor, buffer)
+    impl<R: BufRead> Readable<R> for R {
+        fn reader(self) -> R {
+            self
+        }
     }
 
-    #[test]
-    fn parse_missing_command() {
-        assert_eq!(
-            parse(b"\n", &mut String::new()).unwrap_err().to_string(),
-            "expected command"
-        );
+    struct TestStdin {
+        lines: VecDeque<String>,
+        calls: Vec<usize>,
     }
 
-    #[test]
-    fn parse_unrecognized_command() {
+    impl Read for &mut TestStdin {
+        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+            unimplemented!()
+        }
+    }
+    impl BufRead for &mut TestStdin {
+        fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+            unimplemented!()
+        }
+        fn consume(&mut self, _: usize) {
+            unimplemented!()
+        }
+        fn read_line(&mut self, buf: &mut String) -> std::io::Result<usize> {
+            let line = self.lines.pop_front().unwrap();
+            buf.push_str(&line);
+            let len = line.len();
+            self.calls.push(len);
+            Ok(len)
+        }
+    }
+
+    async fn handle_with_context<B: BufRead, R: Readable<B>>(
+        readable: R,
+        ctx: &MockDiscordContext,
+    ) -> Result<()> {
+        Command::handle(&mut String::new(), readable, ctx).await
+    }
+
+    async fn handle<B: BufRead, R: Readable<B>>(readable: R) -> Result<()> {
+        let ctx = MockDiscordContext::new();
+        handle_with_context(readable, &ctx).await
+    }
+
+    #[tokio::test]
+    async fn parse_unrecognized_command() {
         assert_eq!(
-            parse(b"lorem\n", &mut String::new())
+            handle(Cursor::new(b"lorem\n"))
+                .await
                 .unwrap_err()
                 .to_string(),
             "unrecognized command lorem"
         );
     }
 
-    #[test]
-    fn parse_message() {
+    #[tokio::test]
+    async fn parse_message_missing_channel() {
         assert_eq!(
-            parse(b"message 12345 lorem ipsum\n", &mut String::new()).unwrap(),
-            Command::Message {
-                channel_id: ChannelId::new(12345),
-                content: "lorem ipsum"
-            }
-        );
-    }
-
-    #[test]
-    fn parse_message_missing_channel() {
-        assert_eq!(
-            parse(b"message\n", &mut String::new())
+            handle(Cursor::new(b"message\n"))
+                .await
                 .unwrap_err()
                 .to_string(),
             "expected channel ID"
         );
     }
 
-    #[test]
-    fn parse_message_bad_channel() {
+    #[tokio::test]
+    async fn parse_message_bad_channel() {
         assert_eq!(
-            parse(b"message lorem\n", &mut String::new())
+            handle(Cursor::new(b"message lorem\n"))
+                .await
                 .unwrap_err()
                 .to_string(),
             "channel ID must be a number"
         );
     }
 
-    #[test]
-    fn parse_message_missing_message() {
+    #[tokio::test]
+    async fn parse_message_missing_message() {
         assert_eq!(
-            parse(b"message 12345\n", &mut String::new())
+            handle(Cursor::new(b"message 12345\n"))
+                .await
                 .unwrap_err()
                 .to_string(),
             "expected message"
@@ -174,59 +217,36 @@ mod tests {
 
     #[tokio::test]
     async fn send_message() -> Result<()> {
-        let channel_id = ChannelId::new(12345);
-        let content = "Lorem ipsum";
-
         let mut ctx = MockDiscordContext::new();
         ctx.expect_say()
-            .with(eq(channel_id), eq(content))
+            .with(eq(ChannelId::new(12345)), eq("lorem ipsum"))
             .once()
             .returning(|_, _| Ok(()));
 
-        Command::Message {
-            channel_id,
-            content,
-        }
-        .run(&ctx)
-        .await
+        handle_with_context(Cursor::new(b"message 12345 lorem ipsum\n"), &ctx).await
     }
 
     #[tokio::test]
     async fn send_message_error() {
-        let channel_id = ChannelId::new(12345);
-        let content = "Lorem ipsum";
-
         let mut ctx = MockDiscordContext::new();
         ctx.expect_say()
-            .with(eq(channel_id), eq(content))
             .once()
             .returning(|_, _| Err(serenity::Error::Other("test error")));
 
         assert_eq!(
-            Command::Message {
-                channel_id,
-                content,
-            }
-            .run(&ctx)
-            .await
-            .unwrap_err()
-            .to_string(),
+            handle_with_context(Cursor::new(b"message 12345 lorem ipsum\n"), &ctx)
+                .await
+                .unwrap_err()
+                .to_string(),
             "test error"
         );
     }
 
-    #[test]
-    fn parse_clear_status() {
+    #[tokio::test]
+    async fn parse_clear_status_with_args() {
         assert_eq!(
-            parse(b"clear_status\n", &mut String::new()).unwrap(),
-            Command::ClearStatus
-        );
-    }
-
-    #[test]
-    fn parse_clear_status_with_args() {
-        assert_eq!(
-            parse(b"clear_status lorem ipsum\n", &mut String::new())
+            handle(Cursor::new(b"clear_status lorem ipsum\n"),)
+                .await
                 .unwrap_err()
                 .to_string(),
             "unexpected token"
@@ -240,24 +260,14 @@ mod tests {
             .withf(|d| d.is_none())
             .once()
             .return_const(());
-        Command::ClearStatus.run(&ctx).await
+        handle_with_context(Cursor::new(b"clear_status\n"), &ctx).await
     }
 
-    #[test]
-    fn parse_playing_status() {
+    #[tokio::test]
+    async fn parse_playing_empty_status() {
         assert_eq!(
-            parse(b"playing a guitar\n", &mut String::new()).unwrap(),
-            Command::Status {
-                name: "a guitar",
-                kind: ActivityType::Playing
-            }
-        );
-    }
-
-    #[test]
-    fn parse_playing_empty_status() {
-        assert_eq!(
-            parse(b"playing\n", &mut String::new())
+            handle(Cursor::new(b"playing\n"))
+                .await
                 .unwrap_err()
                 .to_string(),
             "expected token"
@@ -280,11 +290,24 @@ mod tests {
             .once()
             .return_const(());
 
-        Command::Status {
-            kind: ActivityType::Playing,
-            name: "a guitar",
-        }
-        .run(&ctx)
-        .await
+        handle_with_context(Cursor::new(b"playing a guitar\n"), &ctx).await
+    }
+
+    #[tokio::test]
+    async fn ignores_eofs() -> Result<()> {
+        let mut stdin = TestStdin {
+            lines: VecDeque::from(["".to_string(), "clear_status\n".to_string()]),
+            calls: Vec::new(),
+        };
+
+        let mut ctx = MockDiscordContext::new();
+        ctx.expect_set_activity()
+            .withf(|d| d.is_none())
+            .once()
+            .return_const(());
+
+        handle_with_context(&mut stdin, &ctx).await?;
+        assert_eq!(stdin.calls, vec![0, 13]);
+        Ok(())
     }
 }
