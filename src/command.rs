@@ -179,6 +179,16 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn parse_empty_command() {
+        assert_eq!(
+            handle(Cursor::new(b"\n")).await.unwrap_err().to_string(),
+            indoc! {"
+                | 
+                | ^ expected 'message', 'playing', 'listening_to', 'watching', 'competing_in', or 'clear_status'"}
+        );
+    }
+
+    #[tokio::test]
     async fn parse_unrecognized_command() {
         assert_eq!(
             handle(Cursor::new(b"lorem\n"))
@@ -186,8 +196,8 @@ mod tests {
                 .unwrap_err()
                 .to_string(),
             indoc! {"
-                lorem
-                ^ expected 'message', 'playing', 'listening_to', 'watching', 'competing_in', or 'clear_status'"}
+                | lorem
+                | ^^^^^ expected 'message', 'playing', 'listening_to', 'watching', 'competing_in', or 'clear_status'"}
         );
     }
 
@@ -199,8 +209,8 @@ mod tests {
                 .unwrap_err()
                 .to_string(),
             indoc! {"
-                message
-                        ^ expected channel ID"}
+                | message
+                |         ^ expected channel ID"}
         );
     }
 
@@ -212,8 +222,8 @@ mod tests {
                 .unwrap_err()
                 .to_string(),
             indoc! {"
-                message lorem
-                        ^ expected channel ID"}
+                | message lorem
+                |         ^^^^^ expected channel ID"}
         );
     }
 
@@ -225,8 +235,8 @@ mod tests {
                 .unwrap_err()
                 .to_string(),
             indoc! {"
-                message 12345
-                              ^ expected message"}
+                | message 12345
+                |               ^ expected message"}
         );
     }
 
@@ -265,8 +275,8 @@ mod tests {
                 .unwrap_err()
                 .to_string(),
             indoc! {"
-                clear_status lorem ipsum
-                             ^ unexpected token"}
+                | clear_status lorem ipsum
+                |              ^^^^^^^^^^^ unexpected text"}
         );
     }
 
@@ -288,8 +298,8 @@ mod tests {
                 .unwrap_err()
                 .to_string(),
             indoc! {"
-                playing
-                        ^ expected text"}
+                | playing
+                |         ^ expected text"}
         );
     }
 

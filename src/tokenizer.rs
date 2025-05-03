@@ -15,7 +15,8 @@ impl<'a> Tokenizer<'a> {
             let index = value.as_ptr() as usize - self.original.as_ptr() as usize;
             TokenizerError {
                 prefix: self.original[..index].to_string(),
-                suffix: self.original[index..].to_string(),
+                value: value.to_string(),
+                suffix: self.original[(index + value.len())..].to_string(),
                 wrapped: e,
             }
         })
@@ -57,23 +58,34 @@ impl<'a> From<&'a str> for Tokenizer<'a> {
 #[derive(Debug)]
 pub struct TokenizerError {
     prefix: String,
+    value: String,
     suffix: String,
     wrapped: anyhow::Error,
 }
 
 impl fmt::Display for TokenizerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let padding = if self.suffix.is_empty() { 2 } else { 1 };
         write!(
             f,
-            "{}{}\n{:>width$} {}",
+            "| {}{}{}\n| {:>prefix_len$}{:^<value_len$} {}",
             self.prefix,
+            self.value,
             self.suffix,
-            "^",
+            "",
+            "",
             self.wrapped,
-            width = self.prefix.len() + padding
-        )?;
-        Ok(())
+            prefix_len = self.prefix.len()
+                + (if !self.prefix.is_empty() && self.value.is_empty() && self.suffix.is_empty() {
+                    1
+                } else {
+                    0
+                }),
+            value_len = if self.value.is_empty() {
+                1
+            } else {
+                self.value.len()
+            },
+        )
     }
 }
 
@@ -90,7 +102,7 @@ pub fn nonempty_str(description: &str) -> impl FnOnce(&str) -> anyhow::Result<&s
 
 pub fn empty_str(str: &str) -> anyhow::Result<()> {
     if !str.is_empty() {
-        bail!("unexpected token")
+        bail!("unexpected text")
     }
     Ok(())
 }
