@@ -1,5 +1,5 @@
 use anyhow::bail;
-use std::{error, fmt};
+use std::{error, fmt, ops::Range};
 
 pub struct Tokenizer<'a> {
     original: &'a str,
@@ -12,11 +12,10 @@ impl<'a> Tokenizer<'a> {
         F: FnOnce(&'a str) -> anyhow::Result<V>,
     {
         f(value).map_err(|e| {
-            let index = value.as_ptr() as usize - self.original.as_ptr() as usize;
+            let start = value.as_ptr() as usize - self.original.as_ptr() as usize;
             TokenizerError {
-                prefix: self.original[..index].to_string(),
-                value: value.to_string(),
-                suffix: self.original[(index + value.len())..].to_string(),
+                text: self.original.to_string(),
+                range: start..(start + value.len()),
                 wrapped: e,
             }
         })
@@ -57,34 +56,24 @@ impl<'a> From<&'a str> for Tokenizer<'a> {
 
 #[derive(Debug)]
 pub struct TokenizerError {
-    prefix: String,
-    value: String,
-    suffix: String,
+    text: String,
+    range: Range<usize>,
     wrapped: anyhow::Error,
 }
 
 impl fmt::Display for TokenizerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut start = self.range.start;
+        if start != 0 && start == self.text.len() {
+            start += 1;
+        }
         write!(
             f,
-            "| {}{}{}\n| {:>prefix_len$}{:^<value_len$} {}",
-            self.prefix,
-            self.value,
-            self.suffix,
-            "",
-            "",
+            "| {}\n| {}{} {}",
+            self.text,
+            " ".repeat(start),
+            "^".repeat(self.range.len().max(1)),
             self.wrapped,
-            prefix_len = self.prefix.len()
-                + (if !self.prefix.is_empty() && self.value.is_empty() && self.suffix.is_empty() {
-                    1
-                } else {
-                    0
-                }),
-            value_len = if self.value.is_empty() {
-                1
-            } else {
-                self.value.len()
-            },
         )
     }
 }
