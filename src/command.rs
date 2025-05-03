@@ -1,5 +1,5 @@
-use crate::tokenizer::Tokenizer;
-use anyhow::{Context as AnyhowContext, Result, bail};
+use crate::tokenizer::{Tokenizer, TokenizerError, empty_str, nonempty_str};
+use anyhow::{Context as AnyhowContext, bail};
 use mockall::automock;
 use serenity::all::{ActivityData, ActivityType, ChannelId, Context};
 use std::io::{BufRead, Stdin, StdinLock};
@@ -46,22 +46,22 @@ impl Command<'_> {
     pub fn from_reader<'a, B: BufRead>(
         reader: &mut B,
         buffer: &'a mut String,
-    ) -> Result<Command<'a>> {
+    ) -> anyhow::Result<Command<'a>> {
         buffer.clear();
         while reader.read_line(buffer)? == 0 {}
-        Command::try_from(buffer.as_str())
+        Ok(Command::try_from(buffer.as_str().trim_end_matches('\n'))?)
     }
 
     pub async fn handle<B: BufRead, R: Readable<B>, C: DiscordContext>(
         buffer: &mut String,
         readable: R,
         ctx: &C,
-    ) -> Result<()> {
+    ) -> anyhow::Result<()> {
         let command = Command::from_reader(&mut readable.reader(), buffer);
         command?.run(ctx).await
     }
 
-    pub async fn run<C: DiscordContext>(self, ctx: &C) -> Result<()> {
+    pub async fn run<C: DiscordContext>(self, ctx: &C) -> anyhow::Result<()> {
         match self {
             Command::Message {
                 channel_id,
@@ -85,44 +85,51 @@ impl Command<'_> {
     }
 }
 
-fn parse_status(kind: ActivityType, tokenizer: Tokenizer<'_>) -> Result<Command> {
-    Ok(Command::Status {
-        name: tokenizer.expect_rest()?,
-        kind,
-    })
+enum CommandName {
+    Message,
+    Status(ActivityType),
+    ClearStatus,
 }
 
 impl<'a> TryFrom<&'a str> for Command<'a> {
-    type Error = anyhow::Error;
+    type Error = TokenizerError;
 
-    fn try_from(value: &'a str) -> Result<Self> {
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         let mut tokenizer = Tokenizer::from(value);
 
-        match tokenizer.expect_next().context("expected command")? {
-            "message" => Ok(Command::Message {
-                channel_id: tokenizer
-                    .expect_next()
-                    .context("expected channel ID")?
-                    .parse()
-                    .context("channel ID must be a number")?,
-                content: tokenizer.expect_rest().context("expected message")?,
-            }),
-            "playing" => parse_status(ActivityType::Playing, tokenizer),
-            "listening_to" => parse_status(ActivityType::Listening, tokenizer),
-            "watching" => parse_status(ActivityType::Watching, tokenizer),
-            "competing_in" => parse_status(ActivityType::Competing, tokenizer),
-            "clear_status" => {
-                tokenizer.expect_none()?;
-                Ok(Command::ClearStatus)
+        let name = tokenizer.next(|v| {
+            Ok(match v {
+                "message" => CommandName::Message,
+                "playing" => CommandName::Status(ActivityType::Playing),
+                "listening_to" => CommandName::Status(ActivityType::Listening),
+                "watching" => CommandName::Status(ActivityType::Watching),
+                "competing_in" => CommandName::Status(ActivityType::Competing),
+                "clear_status" => CommandName::ClearStatus,
+                _ => bail!("expected 'message', 'playing', 'listening_to', 'watching', 'competing_in', or 'clear_status'"),
+            })
+        })?;
+
+        Ok(match name {
+            CommandName::Message => Command::Message {
+                channel_id: tokenizer.next(|v| v.parse().context("expected channel ID"))?,
+                content: tokenizer.rest(nonempty_str("message"))?,
+            },
+            CommandName::Status(kind) => Command::Status {
+                kind,
+                name: tokenizer.rest(nonempty_str("text"))?,
+            },
+            CommandName::ClearStatus => {
+                tokenizer.rest(empty_str)?;
+                Command::ClearStatus
             }
-            name => bail!("unrecognized command {name}"),
-        }
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use indoc::indoc;
     use mockall::predicate::*;
     use std::collections::VecDeque;
     use std::io::{Cursor, Read};
@@ -162,11 +169,11 @@ mod tests {
     async fn handle_with_context<B: BufRead, R: Readable<B>>(
         readable: R,
         ctx: &MockDiscordContext,
-    ) -> Result<()> {
+    ) -> anyhow::Result<()> {
         Command::handle(&mut String::new(), readable, ctx).await
     }
 
-    async fn handle<B: BufRead, R: Readable<B>>(readable: R) -> Result<()> {
+    async fn handle<B: BufRead, R: Readable<B>>(readable: R) -> anyhow::Result<()> {
         let ctx = MockDiscordContext::new();
         handle_with_context(readable, &ctx).await
     }
@@ -178,7 +185,9 @@ mod tests {
                 .await
                 .unwrap_err()
                 .to_string(),
-            "unrecognized command lorem"
+            indoc! {"
+                lorem
+                ^ expected 'message', 'playing', 'listening_to', 'watching', 'competing_in', or 'clear_status'"}
         );
     }
 
@@ -189,7 +198,9 @@ mod tests {
                 .await
                 .unwrap_err()
                 .to_string(),
-            "expected channel ID"
+            indoc! {"
+                message
+                        ^ expected channel ID"}
         );
     }
 
@@ -200,7 +211,9 @@ mod tests {
                 .await
                 .unwrap_err()
                 .to_string(),
-            "channel ID must be a number"
+            indoc! {"
+                message lorem
+                        ^ expected channel ID"}
         );
     }
 
@@ -211,12 +224,14 @@ mod tests {
                 .await
                 .unwrap_err()
                 .to_string(),
-            "expected message"
+            indoc! {"
+                message 12345
+                              ^ expected message"}
         );
     }
 
     #[tokio::test]
-    async fn send_message() -> Result<()> {
+    async fn send_message() -> anyhow::Result<()> {
         let mut ctx = MockDiscordContext::new();
         ctx.expect_say()
             .with(eq(ChannelId::new(12345)), eq("lorem ipsum"))
@@ -249,12 +264,14 @@ mod tests {
                 .await
                 .unwrap_err()
                 .to_string(),
-            "unexpected token"
+            indoc! {"
+                clear_status lorem ipsum
+                             ^ unexpected token"}
         );
     }
 
     #[tokio::test]
-    async fn clear_status() -> Result<()> {
+    async fn clear_status() -> anyhow::Result<()> {
         let mut ctx = MockDiscordContext::new();
         ctx.expect_set_activity()
             .withf(|d| d.is_none())
@@ -270,12 +287,14 @@ mod tests {
                 .await
                 .unwrap_err()
                 .to_string(),
-            "expected token"
+            indoc! {"
+                playing
+                        ^ expected text"}
         );
     }
 
     #[tokio::test]
-    async fn set_playing_status() -> Result<()> {
+    async fn set_playing_status() -> anyhow::Result<()> {
         let mut ctx = MockDiscordContext::new();
         ctx.expect_set_activity()
             .withf(|d| match d {
@@ -294,7 +313,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ignores_eofs() -> Result<()> {
+    async fn ignores_eofs() -> anyhow::Result<()> {
         let mut stdin = TestStdin {
             lines: VecDeque::from(["".to_string(), "clear_status\n".to_string()]),
             calls: Vec::new(),

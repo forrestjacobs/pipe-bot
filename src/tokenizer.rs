@@ -1,132 +1,96 @@
-use anyhow::{Result, anyhow, bail};
+use anyhow::bail;
+use std::{error, fmt};
 
 pub struct Tokenizer<'a> {
-    str: &'a str,
+    original: &'a str,
+    rest: &'a str,
 }
 
 impl<'a> Tokenizer<'a> {
-    pub fn expect_none(self) -> Result<()> {
-        let str = self.str;
-        if !str.is_empty() {
-            bail!("unexpected token")
-        }
-        Ok(())
+    fn map<V, F>(&self, value: &'a str, f: F) -> Result<V, TokenizerError>
+    where
+        F: FnOnce(&'a str) -> anyhow::Result<V>,
+    {
+        f(value).map_err(|e| {
+            let index = value.as_ptr() as usize - self.original.as_ptr() as usize;
+            TokenizerError {
+                prefix: self.original[..index].to_string(),
+                suffix: self.original[index..].to_string(),
+                wrapped: e,
+            }
+        })
     }
 
-    pub fn expect_rest(self) -> Result<&'a str> {
-        let str = self.str;
-        if str.is_empty() {
-            bail!("expected token")
-        }
-        Ok(str)
+    pub fn next<V, F>(&mut self, f: F) -> Result<V, TokenizerError>
+    where
+        F: FnOnce(&'a str) -> anyhow::Result<V>,
+    {
+        let token = if let Some((token, rest)) = self.rest.split_once(char::is_whitespace) {
+            self.rest = rest.trim_start();
+            token
+        } else {
+            let token = self.rest;
+            self.rest = &self.rest[self.rest.len()..];
+            token
+        };
+
+        self.map(token, f)
     }
 
-    pub fn expect_next(&mut self) -> Result<&'a str> {
-        self.next().ok_or_else(|| anyhow!("expected token"))
+    pub fn rest<V, F>(self, f: F) -> Result<V, TokenizerError>
+    where
+        F: FnOnce(&'a str) -> anyhow::Result<V>,
+    {
+        self.map(self.rest, f)
     }
 }
 
 impl<'a> From<&'a str> for Tokenizer<'a> {
     fn from(value: &'a str) -> Self {
-        Tokenizer { str: value.trim() }
-    }
-}
-
-impl<'a> Iterator for Tokenizer<'a> {
-    type Item = &'a str;
-
-    fn next(&mut self) -> Option<&'a str> {
-        let str = self.str;
-        if str.len() == 0 {
-            None
-        } else if let Some((token, rest)) = str.split_once(char::is_whitespace) {
-            self.str = rest.trim_start();
-            Some(token)
-        } else {
-            self.str = "";
-            Some(str)
+        Tokenizer {
+            original: value,
+            rest: value.trim(),
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[derive(Debug)]
+pub struct TokenizerError {
+    prefix: String,
+    suffix: String,
+    wrapped: anyhow::Error,
+}
 
-    #[test]
-    fn tokenize_empty_string() {
-        let mut tokenizer = Tokenizer::from("");
-        assert_eq!(tokenizer.next(), None);
+impl fmt::Display for TokenizerError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let padding = if self.suffix.is_empty() { 2 } else { 1 };
+        write!(
+            f,
+            "{}{}\n{:>width$} {}",
+            self.prefix,
+            self.suffix,
+            "^",
+            self.wrapped,
+            width = self.prefix.len() + padding
+        )?;
+        Ok(())
     }
+}
 
-    #[test]
-    fn tokenize_one_word_string() {
-        let tokenizer = Tokenizer::from("lorem");
-        assert_eq!(Vec::from_iter(tokenizer), vec!["lorem"]);
-    }
+impl error::Error for TokenizerError {}
 
-    #[test]
-    fn tokenize_two_word_string() {
-        let tokenizer = Tokenizer::from("lorem ipsum");
-        assert_eq!(Vec::from_iter(tokenizer), vec!["lorem", "ipsum"]);
-    }
+pub fn nonempty_str(description: &str) -> impl FnOnce(&str) -> anyhow::Result<&str> {
+    return move |str| {
+        if str.is_empty() {
+            bail!("expected {}", description);
+        }
+        Ok(str)
+    };
+}
 
-    #[test]
-    fn tokenize_whitespace_string() {
-        let tokenizer = Tokenizer::from("  lorem  ipsum\tdolor\nsit\r\namet  ");
-        assert_eq!(
-            Vec::from_iter(tokenizer),
-            vec!["lorem", "ipsum", "dolor", "sit", "amet"]
-        );
+pub fn empty_str(str: &str) -> anyhow::Result<()> {
+    if !str.is_empty() {
+        bail!("unexpected token")
     }
-
-    #[test]
-    fn expect_none() {
-        let tokenizer = Tokenizer::from("");
-        assert!(tokenizer.expect_none().is_ok());
-    }
-
-    #[test]
-    fn expect_none_after_iterating() {
-        let mut tokenizer = Tokenizer::from("lorem");
-        tokenizer.next();
-        assert!(tokenizer.expect_none().is_ok());
-    }
-
-    #[test]
-    fn expect_none_with_token() {
-        let tokenizer = Tokenizer::from("lorem ipsum");
-        assert_eq!(
-            tokenizer.expect_none().unwrap_err().to_string(),
-            "unexpected token"
-        );
-    }
-
-    #[test]
-    fn expect_rest() {
-        let tokenizer = Tokenizer::from("lorem ipsum");
-        assert_eq!(tokenizer.expect_rest().unwrap(), "lorem ipsum");
-    }
-
-    #[test]
-    fn expect_rest_after_iterating() {
-        let mut tokenizer = Tokenizer::from("lorem ipsum dolor");
-        tokenizer.next();
-        assert_eq!(tokenizer.expect_rest().unwrap(), "ipsum dolor");
-    }
-
-    #[test]
-    fn expect_next() {
-        let mut tokenizer = Tokenizer::from("lorem");
-        assert_eq!(tokenizer.expect_next().unwrap(), "lorem");
-    }
-
-    #[test]
-    fn expect_next_without_token() {
-        let mut tokenizer = Tokenizer::from("");
-        assert_eq!(
-            tokenizer.expect_next().unwrap_err().to_string(),
-            "expected token"
-        );
-    }
+    Ok(())
 }
