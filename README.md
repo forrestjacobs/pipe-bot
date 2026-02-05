@@ -29,18 +29,13 @@ rm discord_pipe
 
  4. On the server you want to control, download pipe-bot from [GitHub Releases](https://github.com/forrestjacobs/pipe-bot/releases) (or build the project from source using `cargo build --release`).
 
- 5. Set up a named pipe, and then run the bot with the token from step 2. (Once you have this working, you'll probably want to set it up as a systemd service. You can use the [systemd example files](./systemd/system/), which sets up a named pipe in `/run/discord`)
-
-    ```sh
-    mkfifo discord_pipe
-    pipe-bot -t $DISCORD_TOKEN < discord_pipe
-    ```
+ 5. Set up a service using the [example systemd files](./systemd/system/). This will set up and listen to a named pipe at `/run/discord`.
 
  6. You can now pipe status updates and messages into the named pipe!
 
     ```sh
-    echo "message $CHANNEL_ID Hello there!" > discord_pipe
-    echo "playing my guitar" > discord_pipe
+    echo "message $CHANNEL_ID Hello there!" > /run/discord
+    echo "playing my guitar" > /run/discord
     ```
 
 ## Commands
