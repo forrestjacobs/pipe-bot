@@ -12,7 +12,7 @@ use config::get_config;
 async fn main() -> Result<()> {
     let config = get_config()?;
     Client::builder(config.token, GatewayIntents::empty())
-        .event_handler(Handler)
+        .event_handler(Handler { file_path: config.file })
         .await?
         .start()
         .await?;

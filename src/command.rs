@@ -2,7 +2,7 @@ use crate::tokenizer::{Tokenizer, TokenizerError, empty_str, nonempty_str};
 use anyhow::{Context as AnyhowContext, bail};
 use mockall::automock;
 use serenity::all::{ActivityData, ActivityType, ChannelId, Context};
-use std::io::{BufRead, Stdin, StdinLock};
+use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 
 #[automock]
 pub trait DiscordContext {
@@ -20,15 +20,6 @@ impl DiscordContext for Context {
     }
 }
 
-pub trait Readable<Reader: BufRead> {
-    fn reader(self) -> Reader;
-}
-impl Readable<StdinLock<'static>> for &Stdin {
-    fn reader(self) -> StdinLock<'static> {
-        self.lock()
-    }
-}
-
 #[derive(Debug, PartialEq)]
 pub enum Command<'a> {
     Message {
@@ -43,22 +34,15 @@ pub enum Command<'a> {
 }
 
 impl Command<'_> {
-    pub fn from_reader<'a, B: BufRead>(
-        reader: &mut B,
-        buffer: &'a mut String,
-    ) -> anyhow::Result<Command<'a>> {
-        buffer.clear();
-        while reader.read_line(buffer)? == 0 {}
-        Ok(Command::try_from(buffer.as_str().trim_end_matches('\n'))?)
-    }
-
-    pub async fn handle<B: BufRead, R: Readable<B>, C: DiscordContext>(
+    pub async fn handle<R: AsyncRead + Unpin, C: DiscordContext>(
         buffer: &mut String,
-        readable: R,
+        reader: &mut BufReader<R>,
         ctx: &C,
     ) -> anyhow::Result<()> {
-        let command = Command::from_reader(&mut readable.reader(), buffer);
-        command?.run(ctx).await
+        buffer.clear();
+        while reader.read_line(buffer).await? == 0 {}
+        let command = Command::try_from(buffer.as_str().trim_end_matches('\n'))?;
+        command.run(ctx).await
     }
 
     pub async fn run<C: DiscordContext>(self, ctx: &C) -> anyhow::Result<()> {
@@ -132,48 +116,39 @@ mod tests {
     use indoc::indoc;
     use mockall::predicate::*;
     use std::collections::VecDeque;
-    use std::io::{Cursor, Read};
+    use std::io::Cursor;
+    use std::pin::Pin;
+    use std::task;
+    use tokio::io::ReadBuf;
 
-    impl<R: BufRead> Readable<R> for R {
-        fn reader(self) -> R {
-            self
-        }
-    }
-
-    struct TestStdin {
+    struct TestInput {
         lines: VecDeque<String>,
         calls: Vec<usize>,
     }
 
-    impl Read for &mut TestStdin {
-        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
-            unimplemented!()
-        }
-    }
-    impl BufRead for &mut TestStdin {
-        fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
-            unimplemented!()
-        }
-        fn consume(&mut self, _: usize) {
-            unimplemented!()
-        }
-        fn read_line(&mut self, buf: &mut String) -> std::io::Result<usize> {
-            let line = self.lines.pop_front().unwrap();
-            buf.push_str(&line);
-            let len = line.len();
-            self.calls.push(len);
-            Ok(len)
+    impl AsyncRead for TestInput {
+        fn poll_read(
+            mut self: Pin<&mut Self>,
+            _cx: &mut task::Context<'_>,
+            buf: &mut ReadBuf<'_>,
+        ) -> task::Poll<std::io::Result<()>> {
+            if let Some(line) = self.lines.pop_front() {
+                buf.put_slice(line.as_bytes());
+                self.calls.push(line.len());
+            }
+            task::Poll::Ready(Ok(()))
         }
     }
 
-    async fn handle_with_context<B: BufRead, R: Readable<B>>(
+    async fn handle_with_context<R: AsyncRead + Unpin>(
         readable: R,
         ctx: &MockDiscordContext,
     ) -> anyhow::Result<()> {
-        Command::handle(&mut String::new(), readable, ctx).await
+        let mut reader = BufReader::new(readable);
+        Command::handle(&mut String::new(), &mut reader, ctx).await
     }
 
-    async fn handle<B: BufRead, R: Readable<B>>(readable: R) -> anyhow::Result<()> {
+    async fn handle<R: AsyncRead + Unpin>(readable: R) -> anyhow::Result<()> {
         let ctx = MockDiscordContext::new();
         handle_with_context(readable, &ctx).await
     }
@@ -324,7 +299,7 @@ mod tests {
 
     #[tokio::test]
     async fn ignores_eofs() -> anyhow::Result<()> {
-        let mut stdin = TestStdin {
+        let mut stdin = TestInput {
             lines: VecDeque::from(["".to_string(), "clear_status\n".to_string()]),
             calls: Vec::new(),
         };
