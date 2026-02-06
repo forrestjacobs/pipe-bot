@@ -4,8 +4,8 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-EnvironmentFile=/etc/pipe-bot.env
-ExecStart=/usr/bin/pipe-bot
+Environment=PIPEBOT_DISCORD_TOKEN=[token]
+ExecStart=/usr/local/bin/pipe-bot
 Sockets=pipe-bot.socket
 StandardInput=socket
 StandardOutput=journal

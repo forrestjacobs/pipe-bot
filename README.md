@@ -27,9 +27,9 @@ rm discord_pipe
 
  3. Go to _OAuth2_ > _URL Generator_. Check _bot_, then under _Bot Permissions_ check _Send Messages_. Navigate to the URL in the _Generated Link_ at the bottom of the page and follow the prompts in the Discord app.
 
- 4. On the server you want to control, download pipe-bot from [GitHub Releases](https://github.com/forrestjacobs/pipe-bot/releases) (or build the project from source using `cargo build --release`).
+ 4. On the server you want to control, download pipe-bot from [GitHub Releases](https://github.com/forrestjacobs/pipe-bot/releases) and extract it (or build the project from source using `cargo build --release`).
 
- 5. Set up a service using the [example systemd files](./systemd/system/). This will set up and listen to a named pipe at `/run/discord`.
+ 5. Set up a service using the [example systemd files](./systemd/system/). Make sure to set the token and update the path to the binary. This will set up and listen to a named pipe at `/run/discord`.
 
  6. You can now pipe status updates and messages into the named pipe!
 
