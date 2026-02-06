@@ -66,3 +66,10 @@ echo "listening_to the breeze" > discord_pipe
 ```sh
 echo "clear_status" > discord_pipe
 ```
+
+## Config
+
+| CLI flag              | env                     | description                                      |
+| --------------------- | ----------------------- | ------------------------------------------------ |
+| `-t, --token <TOKEN>` | `PIPEBOT_DISCORD_TOKEN` | Discord bot token, required. See (Setup)[#setup] |
+| `-f, --file <FILE>`   | `PIPEBOT_INPUT_FILE`    | Path to input file. Defaults to stdin.           |
