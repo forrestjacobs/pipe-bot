@@ -1,0 +1,14 @@
+#!/sbin/openrc-run
+command=/usr/local/bin/pipe-bot
+command_args='-t [token] -f /run/discord'
+pidfile=/run/pipe-bot.pid
+command_background=true
+
+depend() {
+    need localmount
+    after net
+}
+
+start_pre() {
+    [ -p /run/discord ] || mkfifo /run/discord
+}
