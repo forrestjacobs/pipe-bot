@@ -69,7 +69,7 @@ echo "clear_status" > discord_pipe
 
 ## Config
 
-| CLI flag              | env                     | description                                      |
-| --------------------- | ----------------------- | ------------------------------------------------ |
-| `-t, --token <TOKEN>` | `PIPEBOT_DISCORD_TOKEN` | Discord bot token, required. See (Setup)[#setup] |
-| `-f, --file <FILE>`   | `PIPEBOT_INPUT_FILE`    | Path to input file. Defaults to stdin.           |
+| CLI flag              | env                     | description                                                 |
+| --------------------- | ----------------------- | ----------------------------------------------------------- |
+| `-t, --token <TOKEN>` | `PIPEBOT_DISCORD_TOKEN` | Discord bot token, required. See <a href="#setup">Setup</a> |
+| `-f, --file <FILE>`   | `PIPEBOT_INPUT_FILE`    | Path to input file. Defaults to stdin.                      |
