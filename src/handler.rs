@@ -1,35 +1,38 @@
-use crate::command::Command;
+use crate::command::DiscordContext;
+use crate::producer::Producer;
+use anyhow::Result;
 use serenity::all::{Context, EventHandler, Ready};
 use serenity::async_trait;
-use tokio::fs::File;
-use tokio::io::{AsyncRead, BufReader, stdin};
+use tokio::io::AsyncRead;
+use tokio::sync::RwLock;
 
-pub struct Handler {
-    pub file_path: Option<String>,
+pub async fn handle<R: AsyncRead + Unpin, C: DiscordContext>(
+    producer: &mut Producer<R>,
+    ctx: &C,
+) -> Result<()> {
+    producer.next().await?.run(ctx).await
 }
 
-#[async_trait]
-impl EventHandler for Handler {
-    async fn ready(&self, ctx: Context, _ready: Ready) {
-        match &self.file_path {
-            None => main_loop(stdin(), ctx).await,
-            Some(path) => match File::open(path).await {
-                Err(e) => {
-                    eprintln!("{e}");
-                    return;
-                }
-                Ok(file) => main_loop(file, ctx).await,
-            },
+pub struct Handler<R> {
+    producer: RwLock<Producer<R>>,
+}
+
+impl<R: AsyncRead + Send + Sync + Unpin> Handler<R> {
+    pub fn new(readable: R) -> Self {
+        Self {
+            producer: RwLock::new(Producer::new(readable)),
         }
     }
 }
 
-async fn main_loop<R: AsyncRead + Unpin>(readable: R, ctx: Context) {
-    let mut buffer = String::new();
-    let mut reader = BufReader::new(readable);
-    loop {
-        if let Err(e) = Command::handle(&mut buffer, &mut reader, &ctx).await {
-            eprintln!("{e}")
+#[async_trait]
+impl<R: AsyncRead + Send + Sync + Unpin> EventHandler for Handler<R> {
+    async fn ready(&self, ctx: Context, _ready: Ready) {
+        let mut producer = self.producer.write().await;
+        loop {
+            if let Err(e) = handle(&mut producer, &ctx).await {
+                eprintln!("{e}")
+            }
         }
     }
 }
