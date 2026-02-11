@@ -24,23 +24,20 @@ impl AsyncRead for TestInput {
     }
 }
 
-async fn handle_with_context<R: AsyncRead + Unpin>(
-    readable: R,
-    ctx: &MockDiscordContext,
-) -> anyhow::Result<()> {
+async fn handle<R: AsyncRead + Unpin>(readable: R, ctx: &MockDiscordContext) -> anyhow::Result<()> {
     let mut reader = CommandReader::new(readable);
     handler::handle(&mut reader, ctx).await
 }
 
-async fn handle<R: AsyncRead + Unpin>(readable: R) -> anyhow::Result<()> {
+async fn handle_bad_input<T: AsRef<[u8]> + Unpin>(inner: T) -> String {
     let ctx = MockDiscordContext::new();
-    handle_with_context(readable, &ctx).await
+    handle(Cursor::new(inner), &ctx).await.unwrap_err().to_string()
 }
 
 #[tokio::test]
 async fn parse_empty_command() {
     assert_eq!(
-        handle(Cursor::new(b"\n")).await.unwrap_err().to_string(),
+        handle_bad_input(b"\n").await,
         indoc! {"
             | 
             | ^ expected 'message', 'playing', 'listening_to', 'watching', 'competing_in', or 'clear_status'"}
@@ -50,10 +47,7 @@ async fn parse_empty_command() {
 #[tokio::test]
 async fn parse_unrecognized_command() {
     assert_eq!(
-        handle(Cursor::new(b"lorem\n"))
-            .await
-            .unwrap_err()
-            .to_string(),
+        handle_bad_input(b"lorem\n").await,
         indoc! {"
             | lorem
             | ^^^^^ expected 'message', 'playing', 'listening_to', 'watching', 'competing_in', or 'clear_status'"}
@@ -63,10 +57,7 @@ async fn parse_unrecognized_command() {
 #[tokio::test]
 async fn parse_message_missing_channel() {
     assert_eq!(
-        handle(Cursor::new(b"message\n"))
-            .await
-            .unwrap_err()
-            .to_string(),
+        handle_bad_input(b"message\n").await,
         indoc! {"
             | message
             |         ^ expected channel ID"}
@@ -76,10 +67,7 @@ async fn parse_message_missing_channel() {
 #[tokio::test]
 async fn parse_message_bad_channel() {
     assert_eq!(
-        handle(Cursor::new(b"message lorem\n"))
-            .await
-            .unwrap_err()
-            .to_string(),
+        handle_bad_input(b"message lorem\n").await,
         indoc! {"
             | message lorem
             |         ^^^^^ expected channel ID"}
@@ -89,10 +77,7 @@ async fn parse_message_bad_channel() {
 #[tokio::test]
 async fn parse_message_missing_message() {
     assert_eq!(
-        handle(Cursor::new(b"message 12345\n"))
-            .await
-            .unwrap_err()
-            .to_string(),
+        handle_bad_input(b"message 12345\n").await,
         indoc! {"
             | message 12345
             |               ^ expected message"}
@@ -107,7 +92,7 @@ async fn send_message() -> anyhow::Result<()> {
         .once()
         .returning(|_, _| Ok(()));
 
-    handle_with_context(Cursor::new(b"message 12345 lorem ipsum\n"), &ctx).await
+    handle(Cursor::new(b"message 12345 lorem ipsum\n"), &ctx).await
 }
 
 #[tokio::test]
@@ -118,7 +103,7 @@ async fn send_message_error() {
         .returning(|_, _| Err(serenity::Error::Other("test error")));
 
     assert_eq!(
-        handle_with_context(Cursor::new(b"message 12345 lorem ipsum\n"), &ctx)
+        handle(Cursor::new(b"message 12345 lorem ipsum\n"), &ctx)
             .await
             .unwrap_err()
             .to_string(),
@@ -129,10 +114,7 @@ async fn send_message_error() {
 #[tokio::test]
 async fn parse_clear_status_with_args() {
     assert_eq!(
-        handle(Cursor::new(b"clear_status lorem ipsum\n"),)
-            .await
-            .unwrap_err()
-            .to_string(),
+        handle_bad_input(b"clear_status lorem ipsum\n").await,
         indoc! {"
             | clear_status lorem ipsum
             |              ^^^^^^^^^^^ unexpected text"}
@@ -146,16 +128,13 @@ async fn clear_status() -> anyhow::Result<()> {
         .withf(|d| d.is_none())
         .once()
         .return_const(());
-    handle_with_context(Cursor::new(b"clear_status\n"), &ctx).await
+    handle(Cursor::new(b"clear_status\n"), &ctx).await
 }
 
 #[tokio::test]
 async fn parse_playing_empty_status() {
     assert_eq!(
-        handle(Cursor::new(b"playing\n"))
-            .await
-            .unwrap_err()
-            .to_string(),
+        handle_bad_input(b"playing\n").await,
         indoc! {"
             | playing
             |         ^ expected text"}
@@ -178,12 +157,12 @@ async fn set_playing_status() -> anyhow::Result<()> {
         .once()
         .return_const(());
 
-    handle_with_context(Cursor::new(b"playing a guitar\n"), &ctx).await
+    handle(Cursor::new(b"playing a guitar\n"), &ctx).await
 }
 
 #[tokio::test]
 async fn ignores_eofs() -> anyhow::Result<()> {
-    let mut stdin = TestInput {
+    let mut input = TestInput {
         lines: VecDeque::from(["".to_string(), "clear_status\n".to_string()]),
         calls: Vec::new(),
     };
@@ -194,7 +173,7 @@ async fn ignores_eofs() -> anyhow::Result<()> {
         .once()
         .return_const(());
 
-    handle_with_context(&mut stdin, &ctx).await?;
-    assert_eq!(stdin.calls, vec![0, 13]);
+    handle(&mut input, &ctx).await?;
+    assert_eq!(input.calls, vec![0, 13]);
     Ok(())
 }
