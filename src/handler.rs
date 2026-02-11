@@ -30,7 +30,7 @@ impl<R: AsyncRead + Send + Sync + Unpin> EventHandler for Handler<R> {
         let mut reader = self
             .reader
             .try_lock()
-            .expect("producer lock should be held exactly once");
+            .expect("reader lock should be held exactly once");
         loop {
             if let Err(e) = handle(&mut reader, &ctx).await {
                 eprintln!("{e}")
