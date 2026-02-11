@@ -1,11 +1,8 @@
-use crate::{command::MockDiscordContext, handler, producer::Producer};
+use crate::{command_reader::CommandReader, discord_context::MockDiscordContext, handler};
 use indoc::indoc;
 use mockall::predicate::*;
 use serenity::all::{ActivityData, ActivityType, ChannelId};
-use std::collections::VecDeque;
-use std::io::Cursor;
-use std::pin::Pin;
-use std::task;
+use std::{collections::VecDeque, io::Cursor, pin::Pin, task};
 use tokio::io::{AsyncRead, ReadBuf};
 
 struct TestInput {
@@ -31,8 +28,8 @@ async fn handle_with_context<R: AsyncRead + Unpin>(
     readable: R,
     ctx: &MockDiscordContext,
 ) -> anyhow::Result<()> {
-    let mut producer = Producer::new(readable);
-    handler::handle(&mut producer, ctx).await
+    let mut reader = CommandReader::new(readable);
+    handler::handle(&mut reader, ctx).await
 }
 
 async fn handle<R: AsyncRead + Unpin>(readable: R) -> anyhow::Result<()> {

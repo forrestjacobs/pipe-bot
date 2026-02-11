@@ -1,12 +1,13 @@
 mod command;
+mod command_reader;
+mod discord_context;
 mod handler;
-mod producer;
 #[cfg(test)]
 mod tests;
 mod tokenizer;
 
-use clap::Parser;
 use anyhow::Result;
+use clap::Parser;
 use handler::Handler;
 use serenity::{Client, all::GatewayIntents};
 use tokio::{fs::File, io::stdin};
@@ -15,11 +16,11 @@ use tokio::{fs::File, io::stdin};
 #[command(version)]
 pub struct Config {
     /// Discord bot token, required
-    #[arg(short, long, env="PIPEBOT_DISCORD_TOKEN")]
+    #[arg(short, long, env = "PIPEBOT_DISCORD_TOKEN")]
     pub token: String,
 
     /// Path to input file, defaults to stdin
-    #[arg(short, long, env="PIPEBOT_INPUT_FILE")]
+    #[arg(short, long, env = "PIPEBOT_INPUT_FILE")]
     pub file: Option<String>,
 }
 

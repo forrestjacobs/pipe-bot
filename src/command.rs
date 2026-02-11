@@ -1,23 +1,7 @@
+use crate::discord_context::DiscordContext;
 use crate::tokenizer::{Tokenizer, TokenizerError, empty_str, nonempty_str};
 use anyhow::{Context as AnyhowContext, bail};
-use mockall::automock;
-use serenity::all::{ActivityData, ActivityType, ChannelId, Context};
-
-#[automock]
-pub trait DiscordContext {
-    async fn say(&self, channel_id: ChannelId, content: &str) -> serenity::Result<()>;
-    fn set_activity(&self, activity: Option<ActivityData>);
-}
-
-impl DiscordContext for Context {
-    async fn say(&self, channel_id: ChannelId, content: &str) -> serenity::Result<()> {
-        channel_id.say(&self.http, content).await?;
-        Ok(())
-    }
-    fn set_activity(&self, activity: Option<ActivityData>) {
-        self.set_activity(activity);
-    }
-}
+use serenity::all::{ActivityData, ActivityType, ChannelId};
 
 #[derive(Debug, PartialEq)]
 pub enum Command {
