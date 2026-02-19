@@ -8,9 +8,10 @@ mod tokenizer;
 
 use anyhow::Result;
 use clap::Parser;
+use command_reader::{FifoReader, StdinReader};
 use handler::Handler;
 use serenity::{Client, all::GatewayIntents};
-use tokio::{fs::File, io::stdin};
+use tokio::io::stdin;
 
 #[derive(Parser, Debug)]
 #[command(version)]
@@ -29,10 +30,9 @@ async fn main() -> Result<()> {
     let config = Config::try_parse()?;
     let builder = Client::builder(config.token, GatewayIntents::empty());
     let builder = if let Some(path) = config.file {
-        let file = File::open(path).await?;
-        builder.event_handler(Handler::new(file))
+        builder.event_handler(Handler::new(FifoReader::new(path)?))
     } else {
-        builder.event_handler(Handler::new(stdin()))
+        builder.event_handler(Handler::new(StdinReader::new(stdin())))
     };
     builder.await?.start().await?;
     Ok(())

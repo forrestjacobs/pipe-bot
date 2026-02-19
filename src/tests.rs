@@ -1,4 +1,5 @@
-use crate::{command_reader::CommandReader, discord_context::MockDiscordContext, handler};
+use crate::command_reader::{CommandReader, StdinReader};
+use crate::{discord_context::MockDiscordContext, handler};
 use indoc::indoc;
 use mockall::predicate::*;
 use serenity::all::{ActivityData, ActivityType, ChannelId};
@@ -24,12 +25,15 @@ impl AsyncRead for TestInput {
     }
 }
 
-async fn handle<R: AsyncRead + Unpin>(readable: R, ctx: &MockDiscordContext) -> anyhow::Result<()> {
-    let mut reader = CommandReader::new(readable);
+async fn handle<R: AsyncRead + Send + Unpin>(
+    readable: R,
+    ctx: &MockDiscordContext,
+) -> anyhow::Result<()> {
+    let mut reader = CommandReader::new(StdinReader::new(readable));
     handler::handle(&mut reader, ctx).await
 }
 
-async fn handle_bad_input<T: AsRef<[u8]> + Unpin>(inner: T) -> String {
+async fn handle_bad_input<T: AsRef<[u8]> + Send + Unpin>(inner: T) -> String {
     let ctx = MockDiscordContext::new();
     handle(Cursor::new(inner), &ctx).await.unwrap_err().to_string()
 }
