@@ -1,4 +1,5 @@
 use crate::command_reader::{CommandReader, StdinReader};
+use crate::handler::HandleError;
 use crate::{discord_context::MockDiscordContext, handler};
 use indoc::indoc;
 use mockall::predicate::*;
@@ -28,7 +29,7 @@ impl AsyncRead for TestInput {
 async fn handle<R: AsyncRead + Send + Unpin>(
     readable: R,
     ctx: &MockDiscordContext,
-) -> anyhow::Result<()> {
+) -> Result<(), HandleError> {
     let mut reader = CommandReader::new(StdinReader::new(readable));
     handler::handle(&mut reader, ctx).await
 }
@@ -89,7 +90,7 @@ async fn parse_message_missing_message() {
 }
 
 #[tokio::test]
-async fn send_message() -> anyhow::Result<()> {
+async fn send_message() -> Result<(), HandleError> {
     let mut ctx = MockDiscordContext::new();
     ctx.expect_say()
         .with(eq(ChannelId::new(12345)), eq("lorem ipsum"))
@@ -126,7 +127,7 @@ async fn parse_clear_status_with_args() {
 }
 
 #[tokio::test]
-async fn clear_status() -> anyhow::Result<()> {
+async fn clear_status() -> Result<(), HandleError> {
     let mut ctx = MockDiscordContext::new();
     ctx.expect_set_activity()
         .withf(|d| d.is_none())
@@ -146,7 +147,7 @@ async fn parse_playing_empty_status() {
 }
 
 #[tokio::test]
-async fn set_playing_status() -> anyhow::Result<()> {
+async fn set_playing_status() -> Result<(), HandleError> {
     let mut ctx = MockDiscordContext::new();
     ctx.expect_set_activity()
         .withf(|d| match d {
@@ -165,7 +166,7 @@ async fn set_playing_status() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn ignores_eofs() -> anyhow::Result<()> {
+async fn ignores_eofs() -> Result<(), HandleError> {
     let mut input = TestInput {
         lines: VecDeque::from(["".to_string(), "clear_status\n".to_string()]),
         calls: Vec::new(),

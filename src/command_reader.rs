@@ -1,10 +1,15 @@
-use crate::command::Command;
-use anyhow::Result;
-use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
+use crate::command::{Command, ParseCommandError};
+use crate::tokenizer::TokenizerError;
+use std::fmt::Debug;
+use std::{error, fmt};
+use tokio::io::{self, AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::net::unix::pipe::{OpenOptions, Receiver};
 
 pub trait LineReader {
-    fn read_line<'a>(&'a mut self, buf: &'a mut String) -> impl Future<Output = Result<()>> + Send;
+    fn read_line<'a>(
+        &'a mut self,
+        buf: &'a mut String,
+    ) -> impl Future<Output = io::Result<()>> + Send;
 }
 
 pub struct StdinReader<R> {
@@ -18,7 +23,7 @@ impl<R: AsyncRead + Send + Unpin> StdinReader<R> {
     }
 }
 impl<R: AsyncRead + Send + Unpin> LineReader for StdinReader<R> {
-    async fn read_line<'a>(&'a mut self, buf: &'a mut String) -> Result<()> {
+    async fn read_line<'a>(&'a mut self, buf: &'a mut String) -> io::Result<()> {
         while self.inner.read_line(buf).await? == 0 {}
         Ok(())
     }
@@ -29,13 +34,13 @@ pub struct FifoReader {
     inner: BufReader<Receiver>,
 }
 impl FifoReader {
-    pub fn new(path: String) -> Result<Self> {
+    pub fn new(path: String) -> io::Result<Self> {
         let inner = BufReader::new(OpenOptions::new().open_receiver(&path)?);
         Ok(Self { path, inner })
     }
 }
 impl LineReader for FifoReader {
-    async fn read_line<'a>(&'a mut self, buf: &'a mut String) -> Result<()> {
+    async fn read_line<'a>(&'a mut self, buf: &'a mut String) -> io::Result<()> {
         while self.inner.read_line(buf).await? == 0 {
             self.inner = BufReader::new(OpenOptions::new().open_receiver(&self.path)?);
         }
@@ -48,6 +53,23 @@ pub struct CommandReader<R> {
     inner: R,
 }
 
+#[derive(Debug)]
+pub enum ReadError {
+    Io(io::Error),
+    Parse(TokenizerError<ParseCommandError>),
+}
+
+impl fmt::Display for ReadError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ReadError::Io(e) => fmt::Display::fmt(&e, f),
+            ReadError::Parse(e) => fmt::Display::fmt(&e, f),
+        }
+    }
+}
+
+impl error::Error for ReadError {}
+
 impl<R: LineReader> CommandReader<R> {
     pub fn new(inner: R) -> Self {
         Self {
@@ -56,11 +78,15 @@ impl<R: LineReader> CommandReader<R> {
         }
     }
 
-    pub async fn next(&mut self) -> Result<Command> {
+    pub async fn next(&mut self) -> Result<Command, ReadError> {
         self.buffer.clear();
-        self.inner.read_line(&mut self.buffer).await?;
-        Ok(Command::try_from(
-            self.buffer.as_str().trim_end_matches('\n'),
-        )?)
+        self.inner
+            .read_line(&mut self.buffer)
+            .await
+            .map_err(ReadError::Io)?;
+        Ok(
+            Command::try_from(self.buffer.as_str().trim_end_matches('\n'))
+                .map_err(ReadError::Parse)?,
+        )
     }
 }

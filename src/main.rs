@@ -6,7 +6,6 @@ mod handler;
 mod tests;
 mod tokenizer;
 
-use anyhow::Result;
 use clap::Parser;
 use command_reader::{FifoReader, StdinReader};
 use handler::Handler;
@@ -26,14 +25,20 @@ pub struct Config {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    let config = Config::try_parse()?;
+async fn main() {
+    let config = Config::try_parse().expect("Unable to parse config");
     let builder = Client::builder(config.token, GatewayIntents::empty());
     let builder = if let Some(path) = config.file {
-        builder.event_handler(Handler::new(FifoReader::new(path)?))
+        builder.event_handler(Handler::new(
+            FifoReader::new(path).expect("Unable to read file"),
+        ))
     } else {
         builder.event_handler(Handler::new(StdinReader::new(stdin())))
     };
-    builder.await?.start().await?;
-    Ok(())
+    builder
+        .await
+        .expect("Unable to build Discord client")
+        .start()
+        .await
+        .expect("Unable to start Discord client");
 }

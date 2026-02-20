@@ -1,4 +1,3 @@
-use anyhow::bail;
 use std::{error, fmt, ops::Range};
 
 pub struct Tokenizer<'a> {
@@ -7,9 +6,9 @@ pub struct Tokenizer<'a> {
 }
 
 impl<'a> Tokenizer<'a> {
-    fn map<V, F>(&self, value: &'a str, f: F) -> Result<V, TokenizerError>
+    fn map<V, E, F>(&self, value: &'a str, f: F) -> Result<V, TokenizerError<E>>
     where
-        F: FnOnce(&'a str) -> anyhow::Result<V>,
+        F: FnOnce(&'a str) -> Result<V, E>,
     {
         f(value).map_err(|e| {
             let start = value.as_ptr() as usize - self.original.as_ptr() as usize;
@@ -21,9 +20,9 @@ impl<'a> Tokenizer<'a> {
         })
     }
 
-    pub fn next<V, F>(&mut self, f: F) -> Result<V, TokenizerError>
+    pub fn next<V, E, F>(&mut self, f: F) -> Result<V, TokenizerError<E>>
     where
-        F: FnOnce(&'a str) -> anyhow::Result<V>,
+        F: FnOnce(&'a str) -> Result<V, E>,
     {
         let token = if let Some((token, rest)) = self.rest.split_once(char::is_whitespace) {
             self.rest = rest.trim_start();
@@ -37,9 +36,9 @@ impl<'a> Tokenizer<'a> {
         self.map(token, f)
     }
 
-    pub fn rest<V, F>(self, f: F) -> Result<V, TokenizerError>
+    pub fn rest<V, E, F>(self, f: F) -> Result<V, TokenizerError<E>>
     where
-        F: FnOnce(&'a str) -> anyhow::Result<V>,
+        F: FnOnce(&'a str) -> Result<V, E>,
     {
         self.map(self.rest, f)
     }
@@ -55,13 +54,23 @@ impl<'a> From<&'a str> for Tokenizer<'a> {
 }
 
 #[derive(Debug)]
-pub struct TokenizerError {
+pub struct TokenizerError<E> {
     text: String,
     range: Range<usize>,
-    wrapped: anyhow::Error,
+    wrapped: E,
 }
 
-impl fmt::Display for TokenizerError {
+impl<E> TokenizerError<E> {
+    pub fn map<F>(self, f: impl FnOnce(E) -> F) -> TokenizerError<F> {
+        TokenizerError {
+            text: self.text,
+            range: self.range,
+            wrapped: f(self.wrapped),
+        }
+    }
+}
+
+impl<E: fmt::Display> fmt::Display for TokenizerError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut start = self.range.start;
         if start != 0 && start == self.text.len() {
@@ -78,20 +87,12 @@ impl fmt::Display for TokenizerError {
     }
 }
 
-impl error::Error for TokenizerError {}
+impl<E: fmt::Display + fmt::Debug> error::Error for TokenizerError<E> {}
 
-pub fn nonempty_str(description: &str) -> impl FnOnce(&str) -> anyhow::Result<&str> {
-    return move |str| {
-        if str.is_empty() {
-            bail!("expected {}", description);
-        }
-        Ok(str)
-    };
+pub fn nonempty_str(str: &str) -> Result<&str, ()> {
+    if str.is_empty() { Err(()) } else { Ok(str) }
 }
 
-pub fn empty_str(str: &str) -> anyhow::Result<()> {
-    if !str.is_empty() {
-        bail!("unexpected text")
-    }
-    Ok(())
+pub fn empty_str(str: &str) -> Result<(), ()> {
+    if !str.is_empty() { Err(()) } else { Ok(()) }
 }

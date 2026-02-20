@@ -1,15 +1,32 @@
-use crate::command_reader::{CommandReader, LineReader};
+use std::{error, fmt};
+use crate::command_reader::{CommandReader, LineReader, ReadError};
 use crate::discord_context::DiscordContext;
-use anyhow::Result;
 use serenity::all::{Context, EventHandler, Ready};
 use serenity::async_trait;
 use tokio::sync::Mutex;
 
+#[derive(Debug)]
+pub enum HandleError {
+    Read(ReadError),
+    Serenity(serenity::Error),
+}
+
+impl fmt::Display for HandleError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            HandleError::Read(e) => fmt::Display::fmt(&e, f),
+            HandleError::Serenity(e) => fmt::Display::fmt(&e, f),
+        }
+    }
+}
+
+impl error::Error for HandleError {}
+
 pub async fn handle<R: LineReader, C: DiscordContext>(
     reader: &mut CommandReader<R>,
     ctx: &C,
-) -> Result<()> {
-    reader.next().await?.run(ctx).await
+) -> Result<(), HandleError> {
+    reader.next().await.map_err(HandleError::Read)?.run(ctx).await.map_err(HandleError::Serenity)
 }
 
 pub struct Handler<R> {
