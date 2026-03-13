@@ -1,6 +1,5 @@
 use crate::command::{Command, ParseCommandError};
 use crate::tokenizer::TokenizerError;
-use std::fmt::Debug;
 use std::{error, fmt};
 use tokio::io::{self, AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::net::unix::pipe::{OpenOptions, Receiver};

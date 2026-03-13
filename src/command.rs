@@ -1,8 +1,8 @@
-use std::fmt;
-use std::num::ParseIntError;
 use crate::discord_context::DiscordContext;
 use crate::tokenizer::{Tokenizer, TokenizerError, empty_str, nonempty_str};
 use serenity::all::{ActivityData, ActivityType, ChannelId};
+use std::fmt;
+use std::num::ParseIntError;
 
 #[derive(Debug, PartialEq)]
 pub enum Command {
@@ -89,10 +89,8 @@ impl<'a> TryFrom<&'a str> for Command {
 
         Ok(match name {
             CommandName::Message => Command::Message {
-                channel_id: tokenizer.next(|v| {
-                    v.parse()
-                        .map_err(ParseCommandError::ExpectedChannelId)
-                })?,
+                channel_id: tokenizer
+                    .next(|v| v.parse().map_err(ParseCommandError::ExpectedChannelId))?,
                 content: tokenizer
                     .rest(nonempty_str)
                     .map_err(|e| e.map(|_| ParseCommandError::ExpectedMessage))?

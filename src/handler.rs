@@ -1,9 +1,10 @@
-use std::{error, fmt};
 use crate::command_reader::{CommandReader, LineReader, ReadError};
 use crate::discord_context::DiscordContext;
+use log::warn;
 use serenity::all::{Context, EventHandler, Ready};
 use serenity::async_trait;
-use tokio::sync::Mutex;
+use std::{error, fmt};
+use tokio::sync::{Mutex, TryLockError};
 
 #[derive(Debug)]
 pub enum HandleError {
@@ -26,7 +27,13 @@ pub async fn handle<R: LineReader, C: DiscordContext>(
     reader: &mut CommandReader<R>,
     ctx: &C,
 ) -> Result<(), HandleError> {
-    reader.next().await.map_err(HandleError::Read)?.run(ctx).await.map_err(HandleError::Serenity)
+    reader
+        .next()
+        .await
+        .map_err(HandleError::Read)?
+        .run(ctx)
+        .await
+        .map_err(HandleError::Serenity)
 }
 
 pub struct Handler<R> {
@@ -39,19 +46,22 @@ impl<R: LineReader + Send> Handler<R> {
             reader: Mutex::new(CommandReader::new(inner)),
         }
     }
+
+    pub async fn handle<C: DiscordContext>(&self, ctx: &C) -> Result<(), TryLockError> {
+        let mut reader = self.reader.try_lock()?;
+        loop {
+            if let Err(e) = handle(&mut reader, ctx).await {
+                warn!("Unable to handle command:\n{e}")
+            }
+        }
+    }
 }
 
 #[async_trait]
 impl<R: LineReader + Send> EventHandler for Handler<R> {
     async fn ready(&self, ctx: Context, _ready: Ready) {
-        let mut reader = self
-            .reader
-            .try_lock()
-            .expect("reader lock should be held exactly once");
-        loop {
-            if let Err(e) = handle(&mut reader, &ctx).await {
-                eprintln!("{e}")
-            }
-        }
+        self.handle(&ctx)
+            .await
+            .expect("Unable to start handling events");
     }
 }

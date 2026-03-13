@@ -36,7 +36,10 @@ async fn handle<R: AsyncRead + Send + Unpin>(
 
 async fn handle_bad_input<T: AsRef<[u8]> + Send + Unpin>(inner: T) -> String {
     let ctx = MockDiscordContext::new();
-    handle(Cursor::new(inner), &ctx).await.unwrap_err().to_string()
+    handle(Cursor::new(inner), &ctx)
+        .await
+        .unwrap_err()
+        .to_string()
 }
 
 #[tokio::test]
