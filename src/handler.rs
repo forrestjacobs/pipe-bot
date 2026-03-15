@@ -15,8 +15,8 @@ pub enum HandleError {
 impl fmt::Display for HandleError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            HandleError::Read(e) => fmt::Display::fmt(&e, f),
-            HandleError::Serenity(e) => fmt::Display::fmt(&e, f),
+            HandleError::Read(e) => write!(f, "{e}"),
+            HandleError::Serenity(e) => write!(f, "Unable to run command: {e}"),
         }
     }
 }
@@ -51,7 +51,7 @@ impl<R: LineReader + Send> Handler<R> {
         let mut reader = self.reader.try_lock()?;
         loop {
             if let Err(e) = handle(&mut reader, ctx).await {
-                warn!("Unable to handle command:\n{e}")
+                warn!("{e}")
             }
         }
     }

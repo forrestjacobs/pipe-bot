@@ -47,6 +47,7 @@ async fn parse_empty_command() {
     assert_eq!(
         handle_bad_input(b"\n").await,
         indoc! {"
+            Unable to parse command:
             | 
             | ^ expected 'message', 'playing', 'listening_to', 'watching', 'competing_in', or 'clear_status'"}
     );
@@ -57,6 +58,7 @@ async fn parse_unrecognized_command() {
     assert_eq!(
         handle_bad_input(b"lorem\n").await,
         indoc! {"
+            Unable to parse command:
             | lorem
             | ^^^^^ expected 'message', 'playing', 'listening_to', 'watching', 'competing_in', or 'clear_status'"}
     );
@@ -67,6 +69,7 @@ async fn parse_message_missing_channel() {
     assert_eq!(
         handle_bad_input(b"message\n").await,
         indoc! {"
+            Unable to parse command:
             | message
             |         ^ expected channel ID"}
     );
@@ -77,6 +80,7 @@ async fn parse_message_bad_channel() {
     assert_eq!(
         handle_bad_input(b"message lorem\n").await,
         indoc! {"
+            Unable to parse command:
             | message lorem
             |         ^^^^^ expected channel ID"}
     );
@@ -87,6 +91,7 @@ async fn parse_message_missing_message() {
     assert_eq!(
         handle_bad_input(b"message 12345\n").await,
         indoc! {"
+            Unable to parse command:
             | message 12345
             |               ^ expected message"}
     );
@@ -115,7 +120,7 @@ async fn send_message_error() {
             .await
             .unwrap_err()
             .to_string(),
-        "test error"
+        "Unable to run command: test error"
     );
 }
 
@@ -124,6 +129,7 @@ async fn parse_clear_status_with_args() {
     assert_eq!(
         handle_bad_input(b"clear_status lorem ipsum\n").await,
         indoc! {"
+            Unable to parse command:
             | clear_status lorem ipsum
             |              ^^^^^^^^^^^ unexpected text"}
     );
@@ -144,6 +150,7 @@ async fn parse_playing_empty_status() {
     assert_eq!(
         handle_bad_input(b"playing\n").await,
         indoc! {"
+            Unable to parse command:
             | playing
             |         ^ expected text"}
     );

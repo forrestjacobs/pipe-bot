@@ -61,8 +61,8 @@ pub enum ReadError {
 impl fmt::Display for ReadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ReadError::Io(e) => fmt::Display::fmt(&e, f),
-            ReadError::Parse(e) => fmt::Display::fmt(&e, f),
+            ReadError::Io(e) => write!(f, "I/O error: {e}"),
+            ReadError::Parse(e) => write!(f, "Unable to parse command:\n{e}"),
         }
     }
 }
