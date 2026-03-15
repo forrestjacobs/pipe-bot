@@ -26,6 +26,17 @@ impl AsyncRead for TestInput {
     }
 }
 
+struct IoErrorInput;
+impl AsyncRead for IoErrorInput {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        _cx: &mut task::Context<'_>,
+        _buf: &mut ReadBuf<'_>,
+    ) -> task::Poll<std::io::Result<()>> {
+        task::Poll::Ready(Err(std::io::Error::other("Test I/O Error")))
+    }
+}
+
 async fn handle<R: AsyncRead + Send + Unpin>(
     readable: R,
     ctx: &MockDiscordContext,
@@ -191,4 +202,15 @@ async fn ignores_eofs() -> Result<(), HandleError> {
     handle(&mut input, &ctx).await?;
     assert_eq!(input.calls, vec![0, 13]);
     Ok(())
+}
+
+#[tokio::test]
+async fn handle_io_error() {
+    let ctx = MockDiscordContext::new();
+    assert_eq!(
+        handle(IoErrorInput, &ctx).await
+            .unwrap_err()
+            .to_string(),
+        "I/O error: Test I/O Error"
+    );
 }
