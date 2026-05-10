@@ -1,9 +1,10 @@
-use crate::command_reader::{CommandReader, LineReader, ReadError};
+use crate::command_reader::{CommandReader, ReadError};
 use crate::discord_context::DiscordContext;
 use log::warn;
 use serenity::all::{Context, EventHandler, Ready};
 use serenity::async_trait;
 use std::{error, fmt};
+use tokio::io::{AsyncRead, BufReader};
 use tokio::sync::{Mutex, TryLockError};
 
 #[derive(Debug)]
@@ -23,8 +24,8 @@ impl fmt::Display for HandleError {
 
 impl error::Error for HandleError {}
 
-pub async fn handle<R: LineReader, C: DiscordContext>(
-    reader: &mut CommandReader<R>,
+pub async fn handle<R: AsyncRead + Unpin, C: DiscordContext>(
+    reader: &mut CommandReader<BufReader<R>>,
     ctx: &C,
 ) -> Result<(), HandleError> {
     reader
@@ -37,10 +38,10 @@ pub async fn handle<R: LineReader, C: DiscordContext>(
 }
 
 pub struct Handler<R> {
-    reader: Mutex<CommandReader<R>>,
+    reader: Mutex<CommandReader<BufReader<R>>>,
 }
 
-impl<R: LineReader + Send> Handler<R> {
+impl<R: AsyncRead + Unpin> Handler<R> {
     pub fn new(inner: R) -> Self {
         Self {
             reader: Mutex::new(CommandReader::new(inner)),
@@ -58,7 +59,7 @@ impl<R: LineReader + Send> Handler<R> {
 }
 
 #[async_trait]
-impl<R: LineReader + Send> EventHandler for Handler<R> {
+impl<R: AsyncRead + Send + Unpin> EventHandler for Handler<R> {
     async fn ready(&self, ctx: Context, _ready: Ready) {
         self.handle(&ctx)
             .await

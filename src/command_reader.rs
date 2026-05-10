@@ -2,50 +2,6 @@ use crate::command::{Command, ParseCommandError};
 use crate::tokenizer::TokenizerError;
 use std::{error, fmt};
 use tokio::io::{self, AsyncBufReadExt, AsyncRead, BufReader};
-use tokio::net::unix::pipe::{OpenOptions, Receiver};
-
-pub trait LineReader {
-    fn read_line<'a>(
-        &'a mut self,
-        buf: &'a mut String,
-    ) -> impl Future<Output = io::Result<()>> + Send;
-}
-
-pub struct StdinReader<R> {
-    inner: BufReader<R>,
-}
-impl<R: AsyncRead + Send + Unpin> StdinReader<R> {
-    pub fn new(inner: R) -> Self {
-        Self {
-            inner: BufReader::new(inner),
-        }
-    }
-}
-impl<R: AsyncRead + Send + Unpin> LineReader for StdinReader<R> {
-    async fn read_line<'a>(&'a mut self, buf: &'a mut String) -> io::Result<()> {
-        while self.inner.read_line(buf).await? == 0 {}
-        Ok(())
-    }
-}
-
-pub struct FifoReader {
-    path: String,
-    inner: BufReader<Receiver>,
-}
-impl FifoReader {
-    pub fn new(path: String) -> io::Result<Self> {
-        let inner = BufReader::new(OpenOptions::new().open_receiver(&path)?);
-        Ok(Self { path, inner })
-    }
-}
-impl LineReader for FifoReader {
-    async fn read_line<'a>(&'a mut self, buf: &'a mut String) -> io::Result<()> {
-        while self.inner.read_line(buf).await? == 0 {
-            self.inner = BufReader::new(OpenOptions::new().open_receiver(&self.path)?);
-        }
-        Ok(())
-    }
-}
 
 pub struct CommandReader<R> {
     buffer: String,
@@ -69,20 +25,23 @@ impl fmt::Display for ReadError {
 
 impl error::Error for ReadError {}
 
-impl<R: LineReader> CommandReader<R> {
+impl<R: AsyncRead + Unpin> CommandReader<BufReader<R>> {
     pub fn new(inner: R) -> Self {
         Self {
             buffer: String::new(),
-            inner,
+            inner: BufReader::new(inner),
         }
     }
 
     pub async fn next(&mut self) -> Result<Command, ReadError> {
         self.buffer.clear();
-        self.inner
+        while self
+            .inner
             .read_line(&mut self.buffer)
             .await
-            .map_err(ReadError::Io)?;
+            .map_err(ReadError::Io)?
+            == 0
+        {}
         Ok(
             Command::try_from(self.buffer.as_str().trim_end_matches('\n'))
                 .map_err(ReadError::Parse)?,

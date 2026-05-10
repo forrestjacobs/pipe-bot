@@ -1,4 +1,4 @@
-use crate::command_reader::{CommandReader, StdinReader};
+use crate::command_reader::CommandReader;
 use crate::handler::HandleError;
 use crate::{discord_context::MockDiscordContext, handler};
 use indoc::indoc;
@@ -37,11 +37,11 @@ impl AsyncRead for IoErrorInput {
     }
 }
 
-async fn handle<R: AsyncRead + Send + Unpin>(
+async fn handle<R: AsyncRead + Unpin>(
     readable: R,
     ctx: &MockDiscordContext,
 ) -> Result<(), HandleError> {
-    let mut reader = CommandReader::new(StdinReader::new(readable));
+    let mut reader = CommandReader::new(readable);
     handler::handle(&mut reader, ctx).await
 }
 
