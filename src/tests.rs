@@ -59,7 +59,7 @@ async fn parse_empty_command() {
         handle_bad_input(b"\n").await,
         indoc! {"
             Unable to parse command:
-            | 
+            |\x20
             | ^ expected 'message', 'playing', 'listening_to', 'watching', 'competing_in', or 'clear_status'"}
     );
 }
@@ -208,9 +208,7 @@ async fn ignores_eofs() -> Result<(), HandleError> {
 async fn handle_io_error() {
     let ctx = MockDiscordContext::new();
     assert_eq!(
-        handle(IoErrorInput, &ctx).await
-            .unwrap_err()
-            .to_string(),
+        handle(IoErrorInput, &ctx).await.unwrap_err().to_string(),
         "I/O error: Test I/O Error"
     );
 }
