@@ -1,6 +1,5 @@
-use crate::command_reader::CommandReader;
-use crate::handler::HandleError;
-use crate::{discord_context::MockDiscordContext, handler};
+use crate::discord_context::MockDiscordContext;
+use crate::handler::{MainLoop, MainLoopError};
 use indoc::indoc;
 use mockall::predicate::*;
 use serenity::all::{ActivityData, ActivityType, ChannelId};
@@ -40,9 +39,8 @@ impl AsyncRead for IoErrorInput {
 async fn handle<R: AsyncRead + Unpin>(
     readable: R,
     ctx: &MockDiscordContext,
-) -> Result<(), HandleError> {
-    let mut reader = CommandReader::new(readable);
-    handler::handle(&mut reader, ctx).await
+) -> Result<(), MainLoopError> {
+    MainLoop::new(readable).handle_once(ctx).await
 }
 
 async fn handle_bad_input<T: AsRef<[u8]> + Send + Unpin>(inner: T) -> String {
@@ -109,7 +107,7 @@ async fn parse_message_missing_message() {
 }
 
 #[tokio::test]
-async fn send_message() -> Result<(), HandleError> {
+async fn send_message() -> Result<(), MainLoopError> {
     let mut ctx = MockDiscordContext::new();
     ctx.expect_say()
         .with(eq(ChannelId::new(12345)), eq("lorem ipsum"))
@@ -147,7 +145,7 @@ async fn parse_clear_status_with_args() {
 }
 
 #[tokio::test]
-async fn clear_status() -> Result<(), HandleError> {
+async fn clear_status() -> Result<(), MainLoopError> {
     let mut ctx = MockDiscordContext::new();
     ctx.expect_set_activity()
         .withf(|d| d.is_none())
@@ -168,7 +166,7 @@ async fn parse_playing_empty_status() {
 }
 
 #[tokio::test]
-async fn set_playing_status() -> Result<(), HandleError> {
+async fn set_playing_status() -> Result<(), MainLoopError> {
     let mut ctx = MockDiscordContext::new();
     ctx.expect_set_activity()
         .withf(|d| match d {
@@ -187,7 +185,7 @@ async fn set_playing_status() -> Result<(), HandleError> {
 }
 
 #[tokio::test]
-async fn ignores_eofs() -> Result<(), HandleError> {
+async fn ignores_eofs() -> Result<(), MainLoopError> {
     let mut input = TestInput {
         lines: VecDeque::from(["".to_string(), "clear_status\n".to_string()]),
         calls: Vec::new(),

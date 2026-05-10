@@ -13,6 +13,8 @@ use log::LevelFilter;
 use serenity::{Client, all::GatewayIntents};
 use tokio::io::stdin;
 
+use crate::handler::MainLoop;
+
 #[derive(Parser, Debug)]
 #[command(version)]
 pub struct Config {
@@ -38,9 +40,10 @@ async fn main() {
     // TODO: Set level from config
     env_logger::builder().filter_level(LevelFilter::Info).init();
 
-    let handler = Handler::new(stdin());
+    let mut main_loop = MainLoop::new(stdin());
     if let Some(token) = config.token {
-        let builder = Client::builder(token, GatewayIntents::empty()).event_handler(handler);
+        let builder =
+            Client::builder(token, GatewayIntents::empty()).event_handler(Handler::new(main_loop));
         builder
             .await
             .expect("Unable to build Discord client")
@@ -48,9 +51,6 @@ async fn main() {
             .await
             .expect("Unable to start Discord client")
     } else {
-        handler
-            .handle(&DryRunContext)
-            .await
-            .expect("Unable to handle events")
+        main_loop.handle(&DryRunContext).await
     }
 }
